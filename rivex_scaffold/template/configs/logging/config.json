@@ -1,0 +1,9 @@
+{
+  "log_level": "info",
+  "log_file": "logs/{{project_slug}}.ndjson",
+  "log_stdout": true,
+  "log_stdout_format": "pretty",
+  "log_stdout_color": "auto",
+  "log_caller_info": true,
+  "log_sample_one_in": 1
+}

@@ -1,0 +1,7 @@
+{
+  "jwt_secret": "change-me-to-a-long-random-string-in-production-min-32-chars",
+  "jwt_refresh_secret": "change-me-to-another-long-random-string-min-32-chars",
+  "jwt_expires_minutes": 15,
+  "jwt_refresh_expires_days": 7,
+  "jwt_algorithm": "HS256"
+}

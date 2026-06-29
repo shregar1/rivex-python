@@ -1,0 +1,3 @@
+{
+  "database_url": "postgres://{{project_slug}}:{{project_slug}}_secret@localhost:5432/{{project_slug}}"
+}

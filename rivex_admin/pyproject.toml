@@ -1,0 +1,35 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "rivex-admin"
+version = "0.2.0"
+description = "A sleek React-based admin dashboard plugin for the Rivex web framework"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = [
+    "rivex>=0.2.0",
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Topic :: Internet :: WWW/HTTP :: HTTP Servers",
+]
+
+[project.entry-points."rivex.plugins.admin"]
+admin = "rivex_admin:register_admin_routes"
+
+[tool.hatch.build.targets.wheel]
+packages = ["."]
+exclude = [
+    "pyproject.toml",
+    "README.md",
+    ".gitignore",
+    "dist",
+]
+
+[tool.hatch.build.targets.wheel.sources]
+"." = "rivex_admin"

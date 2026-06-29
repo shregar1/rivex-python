@@ -1,0 +1,27 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "rivex-monitor"
+version = "0.1.0"
+description = "End-to-end protocol monitoring partials for the Rivex admin dashboard"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = [
+    "rivex>=0.2.0",
+    "rivex-admin>=0.2.0",
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["."]
+exclude = ["pyproject.toml", "README.md", ".gitignore", "dist"]
+
+[tool.hatch.build.targets.wheel.sources]
+"." = "rivex_monitor"

@@ -1,0 +1,53 @@
+[project]
+name = "rivex-adapter"
+version = "0.1.0"
+description = "Optional database, messaging, blob storage, and WebRTC adapters for Rivex"
+requires-python = ">=3.10"
+dependencies = [
+    "rivex>=0.2.0",
+    "asyncpg>=0.29",
+    "redis>=5.0",
+    "motor>=3.4",
+    "aiomysql>=0.2",
+    "aioboto3>=13.0",
+    "aiosqlite>=0.20",
+]
+
+[project.optional-dependencies]
+sqs = ["aioboto3>=13.0"]
+kafka = ["aiokafka>=0.10"]
+gcp-pubsub = ["google-cloud-pubsub>=2.0"]
+gcs = ["google-cloud-storage>=2.0"]
+azure-queue = ["azure-storage-queue>=12.0"]
+azure-servicebus = ["azure-servicebus>=7.0"]
+azure-blob = ["azure-storage-blob>=12.0"]
+webrtc = ["aiortc>=1.6"]
+all-queues = [
+    "aioboto3>=13.0",
+    "aiokafka>=0.10",
+    "google-cloud-pubsub>=2.0",
+    "azure-storage-queue>=12.0",
+    "azure-servicebus>=7.0",
+]
+all-blob = [
+    "aioboto3>=13.0",
+    "google-cloud-storage>=2.0",
+    "azure-storage-blob>=12.0",
+]
+all = [
+    "aioboto3>=13.0",
+    "aiokafka>=0.10",
+    "google-cloud-pubsub>=2.0",
+    "google-cloud-storage>=2.0",
+    "azure-storage-queue>=12.0",
+    "azure-servicebus>=7.0",
+    "azure-storage-blob>=12.0",
+    "aiortc>=1.6",
+]
+
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]

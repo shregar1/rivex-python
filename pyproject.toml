@@ -1,0 +1,209 @@
+[build-system]
+requires = ["maturin>=1.0,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "rivex"
+version = "0.2.2"
+description = "A Rust-powered Python web framework with FastAPI-like ergonomics"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+keywords = [
+    "web",
+    "framework",
+    "asgi",
+    "http",
+    "rust",
+    "fastapi",
+    "pydantic",
+    "openapi",
+]
+authors = [
+    { name = "Rivex contributors" },
+]
+# The Rust core (`rivex_core` extension module) is compiled and bundled directly
+# into the `rivex` wheel by maturin — there is NO separate `rivex-core` package
+# to install. `pip install rivex` ships a self-contained binary wheel per platform.
+#
+# Core runtime deps — what every Rivex app needs:
+#   pydantic >= 2.0 — request / response models (and Pydantic-native validation)
+#   msgspec >= 0.18 — alternative high-performance body validation, OpenAPI
+#                      generation, and response serialisation
+#   orjson >= 3.9   — fast JSON encoder/decoder
+#   uvicorn >= 0.30 — the ASGI server ``app.run()`` defaults to
+#   httpx >= 0.27   — ``TestClient`` + OpenAPI client round-trips
+#   watchfiles >= 0.20 — ``rivex dev`` autoreload
+#   anyio >= 4.0    — ASGI lifespan + concurrency primitives
+dependencies = [
+    "pydantic>=2.0",
+    "msgspec>=0.18",
+    "orjson>=3.9",
+    # uvicorn >= 0.30 ships ASGI 3 + lifespan + websockets.
+    # We pin websockets<14 because websockets 14 removed the
+    # ``ws_server`` keyword arg that uvicorn's WebSocket protocol
+    # still passes; wsproto is the alternative (``ws="wsproto"``).
+    "uvicorn>=0.30",
+    "websockets>=10,<14",
+    "httpx>=0.27",
+    "watchfiles>=0.20",
+    "anyio>=4.0",
+]
+
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Framework :: FastAPI",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Topic :: Internet :: WWW/HTTP :: HTTP Servers",
+    "Topic :: Software Development :: Libraries :: Application Frameworks",
+    "Typing :: Typed",
+]
+
+[project.urls]
+Homepage = "https://rivex.dev"
+Documentation = "https://rivex.dev/docs"
+Repository = "https://github.com/rivex-dev/python.rivex.dev"
+Issues = "https://github.com/rivex-dev/python.rivex.dev/issues"
+Changelog = "https://github.com/rivex-dev/python.rivex.dev/blob/main/CHANGELOG.md"
+
+[project.scripts]
+rivex = "rivex.cli:main"
+
+# ---------------------------------------------------------------------------
+# Plugin entry points. Third parties (or these sibling packages) can
+# advertise themselves as Rivex plugins by registering here.  ``importlib.metadata``
+# reads these at runtime so the core package doesn't need to know
+# about specific plugins.
+# ---------------------------------------------------------------------------
+[project.entry-points."rivex.plugins.admin"]
+admin = "rivex_admin:register_admin_routes"
+
+[project.entry-points."rivex.plugins.codegen"]
+default = "rivex_codegen:generate_resource"
+
+[project.entry-points."rivex.plugins.scaffold"]
+mvc = "rivex_scaffold:main"
+
+[project.optional-dependencies]
+# Optional companion packages.  The bare ``rivex`` wheel is the HTTP
+# framework only — no admin UI, no codegen, no project scaffold.
+# Users opt into the parts they need:
+#
+#   pip install rivex[admin]      # + admin dashboard
+#   pip install rivex[codegen]    # + resource scaffolder
+#   pip install rivex[scaffold]   # + project scaffolder (`rivex generate`)
+#   pip install rivex[all]        # everything
+#
+# These are *companion packages* living in the same monorepo today,
+# and on PyPI as separate wheels tomorrow.  The core ``rivex`` wheel
+# stays small and depends only on what's needed to run an HTTP service.
+admin = ["rivex-admin>=0.2.0"]
+codegen = ["rivex-codegen>=0.2.0"]
+scaffold = ["rivex-scaffold>=0.2.0"]
+all = ["rivex-admin>=0.2.0", "rivex-codegen>=0.2.0", "rivex-scaffold>=0.2.0", "rivex-react>=0.2.0"]
+react = ["rivex-react>=0.2.0"]
+# Optional ASGI server adapters. Install with:
+#   pip install rivex[uvicorn]
+# These are not part of the core Rivex wheel — they're opt-in
+# adapters to third-party servers. The native Rivex engines
+# (``app.run()`` and ``app.run_sync()``) are faster and don't
+# require any extra dependency.
+uvicorn = ["uvicorn>=0.30"]
+# Optional: install the standalone `schemax` package to use Rivex with the
+# IDL toolchain (`rivex.schemax` shim + `rivex schemax …` CLI). The IDL
+# code lives at `schemax.idl` in the standalone package.
+schemax = ["schemax>=0.1.0"]
+dev = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.21",
+    "httpx>=0.27",
+    "mypy>=1.0",
+    "ruff>=0.4",
+    "schemax>=0.1.0",
+    "rivex-admin>=0.2.0",
+    "rivex-codegen>=0.2.0",
+    "rivex-scaffold>=0.2.0",
+    "rivex-react>=0.2.0",
+]
+
+[tool.maturin]
+# Build the PyO3 extension from the sibling Rust core (single source of truth).
+# `python-source = "."` ships the pure-Python `rivex/` package alongside the
+# compiled extension. The extension is placed inside the package as
+# `rivex.rivex_core`; the top-level `rivex_core.py` shim re-exposes it as the
+# `rivex_core` module so every existing `import rivex_core` call site keeps
+# working — all in ONE self-contained wheel, no separate `rivex-core` package.
+manifest-path = "../core.rivex.vexarr.com/crates/rivex-python/Cargo.toml"
+module-name = "rivex.rivex_core"
+python-source = "src"
+features = ["pyo3/extension-module"]
+include = ["src/rivex_core.py"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "strict"
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+# The vendored template directory uses ``{{placeholder}}`` tokens that ruff's
+# TOML and Python parsers will reject. Exclude it from lint discovery.
+extend-exclude = [
+    "rivex_scaffold/template",
+    "rivex_codegen/templates",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["E501"]
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI-style dependency markers are legitimate function-call defaults.
+extend-immutable-calls = [
+    "rivex.Depends",
+    "rivex.dependencies.Depends",
+    "rivex.File",
+    "rivex.uploads.File",
+    "rivex.Form",
+    "rivex.uploads.Form",
+    "rivex.Body",
+    "rivex.params.Body",
+    "rivex.Field",
+    "rivex.schema.Field",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["B008"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
+# ``rivex_core`` is the Rust extension compiled by maturin. The stub
+# at ``stubs/rivex_core/__init__.pyi`` is the type description of the
+# top-level ``rivex_core`` module that the wrappers in
+# ``src/rivex/_rust.py`` (and a few other call sites) import. Without
+# this, mypy sees only the installed stub (which may pre-date the
+# current Rust API) and reports spurious ``has no attribute`` errors.
+mypy_path = "stubs"
+exclude = [
+    # The scaffold template is a sample project users will copy and
+    # edit; it isn't part of the framework's runtime and uses
+    # template-style placeholders.
+    "rivex_scaffold/template",
+    "rivex_codegen/templates",
+    "mvc",
+]

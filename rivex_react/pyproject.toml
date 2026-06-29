@@ -1,0 +1,32 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "rivex-react"
+version = "0.2.0"
+description = "React-based API documentation renderer plugin for the Rivex web framework"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = [
+    "rivex>=0.2.0",
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Topic :: Internet :: WWW/HTTP :: HTTP Servers",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["."]
+exclude = [
+    "pyproject.toml",
+    "README.md",
+    ".gitignore",
+    "dist",
+]
+
+[tool.hatch.build.targets.wheel.sources]
+"." = "rivex_react"
