@@ -32,6 +32,23 @@ def test_coerce_str():
     assert _coerce("hello", str) == "hello"
 
 
+def test_coerce_bad_int_raises_422_not_valueerror():
+    # A non-numeric or out-of-range int param must be a 422, not a bare
+    # ValueError that surfaces as a 500 (regression: this used to leak from the
+    # unguarded _extract_path / _extract_query call sites).
+    for bad in ("abc", "1.5", "99999999999999999999999999", ""):
+        with pytest.raises(HTTPException) as exc:
+            _coerce(bad, int)
+        assert exc.value.status_code == 422
+
+
+def test_coerce_bad_float_raises_422():
+    for bad in ("abc", "", "inf", "nan"):
+        with pytest.raises(HTTPException) as exc:
+            _coerce(bad, float)
+        assert exc.value.status_code == 422
+
+
 def test_normalize_dict():
     result = _normalize_response({"key": "value"}, 200)
     assert result["status"] == 200

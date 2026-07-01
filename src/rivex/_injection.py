@@ -1305,15 +1305,27 @@ def _coerce(value: str, hint: Any) -> Any:
     if RC_V2:
         target = {int: "int", float: "float", bool: "bool"}.get(hint)
         if target:
-            result = _rc.coerce_value(value, target)
+            # A non-numeric / out-of-range value must be a 422, not an unhandled
+            # ValueError from the core (which otherwise surfaces as a 500 for
+            # plain typed path/query params — see _extract_path/_extract_query).
+            try:
+                result = _rc.coerce_value(value, target)
+            except (ValueError, TypeError, OverflowError) as exc:
+                raise HTTPException(422, detail=f"Value '{value}' is not a valid {target}") from exc
             if target == "float" and not _math_isfinite(result):
                 raise HTTPException(422, detail=f"Value '{value}' is not a finite number")
             return result
         return value
     if hint is int:
-        return int(value)
+        try:
+            return int(value)
+        except (ValueError, TypeError) as exc:
+            raise HTTPException(422, detail=f"Value '{value}' is not a valid int") from exc
     if hint is float:
-        f = float(value)
+        try:
+            f = float(value)
+        except (ValueError, TypeError) as exc:
+            raise HTTPException(422, detail=f"Value '{value}' is not a valid float") from exc
         if not _math_isfinite(f):
             raise HTTPException(422, detail=f"Value '{value}' is not a finite number")
         return f

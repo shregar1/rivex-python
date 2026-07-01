@@ -72,6 +72,8 @@ class TestClient:
         json: Any = None,
         data: Any = None,
         content: bytes | str | None = None,
+        follow_redirects: bool = False,
+        max_redirects: int = 20,
     ) -> TestResponse:
         request_data = self._build_request(
             method.upper(), url, headers, params, json, data, content
@@ -122,6 +124,30 @@ class TestClient:
             outer_chain = _wrap
 
         raw = asyncio.run(outer_chain(request_data))
+
+        # Optionally follow 3xx redirects (off by default, matching the prior
+        # behaviour of returning the redirect response as-is). 303 — and 301/302
+        # from a non-GET/HEAD — degrade to GET without a body, per the usual
+        # browser/httpx semantics; 307/308 replay the method and body.
+        if follow_redirects:
+            redirects = 0
+            cur_method = method.upper()
+            while raw.get("status") in (301, 302, 303, 307, 308) and redirects < max_redirects:
+                location = next(
+                    (v for k, v in raw.get("headers", []) if k.lower() == "location"), None
+                )
+                if not location:
+                    break
+                redirects += 1
+                if raw["status"] in (301, 302, 303) and cur_method not in ("GET", "HEAD"):
+                    cur_method, nxt_json, nxt_data, nxt_content = "GET", None, None, None
+                else:
+                    nxt_json, nxt_data, nxt_content = json, data, content
+                next_data = self._build_request(
+                    cur_method, location, headers, None, nxt_json, nxt_data, nxt_content
+                )
+                raw = asyncio.run(outer_chain(next_data))
+
         return self._to_response(raw)
 
     def _get_sync_app(self) -> rivex_core.RivexSyncApp:

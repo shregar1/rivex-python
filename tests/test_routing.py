@@ -1,4 +1,4 @@
-from rivex.routing import Controller, Router, RouteRecord, get, post
+from rivex.routing import Controller, Router, RouteRecord, get, post, route
 
 
 def test_router_creates_records():
@@ -150,6 +150,39 @@ def test_controller_class_creates_bound_route_records():
     assert router._routes[1].status_code == 201
     assert router._routes[1].tags == ["users", "write"]
     assert router._routes[0].endpoint.__self__.__class__ is UsersController
+
+
+def test_route_namespace_attributes_match_bare_decorators():
+    # ``route.get`` / ``route.post`` / ... are the same decorators as the bare
+    # ``get`` / ``post`` module functions.
+    assert route.get is get
+    assert route.post is post
+    for verb in ("get", "post", "put", "delete", "patch", "head", "options"):
+        assert callable(getattr(route, verb))
+
+
+def test_controller_verb_named_handlers_via_route_namespace():
+    # A Controller can name handlers after HTTP verbs when using @route.get,
+    # including two same-verb routes — which is impossible with a bare
+    # ``from rivex import get`` because ``def get(self): ...`` rebinds ``get``
+    # in the class body and the next ``@get(...)`` raises TypeError.
+    class ItemController(Controller):
+        path = "/items"
+
+        @route.get("")
+        async def get(self):
+            return {"list": True}
+
+        @route.get("/{item_id}")
+        async def get_one(self, item_id: int):
+            return {"id": item_id}
+
+    router = Router()
+    router.include_controller(ItemController)
+    assert [(r.method, r.path) for r in router._routes] == [
+        ("GET", "/items"),
+        ("GET", "/items/{item_id}"),
+    ]
 
 
 def test_controller_instance_keeps_state():

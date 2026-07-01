@@ -131,3 +131,41 @@ def test_test_client_context_runs_lifespan_and_events():
         assert events == ["lifespan-start", "startup"]
 
     assert events == ["lifespan-start", "startup", "shutdown", "lifespan-stop"]
+
+
+def test_test_client_redirects_not_followed_by_default():
+    from rivex import RedirectResponse
+
+    app = Rivex()
+
+    @app.get("/go")
+    async def go():
+        return RedirectResponse("/dest", status_code=302)
+
+    @app.get("/dest")
+    async def dest():
+        return {"ok": True}
+
+    client = TestClient(app)
+    resp = client.get("/go")
+    assert resp.status_code == 302
+    assert resp.headers.get("location") == "/dest"
+
+
+def test_test_client_follow_redirects():
+    from rivex import RedirectResponse
+
+    app = Rivex()
+
+    @app.get("/go")
+    async def go():
+        return RedirectResponse("/dest", status_code=302)
+
+    @app.get("/dest")
+    async def dest():
+        return {"ok": True}
+
+    client = TestClient(app)
+    resp = client.get("/go", follow_redirects=True)
+    assert resp.status_code == 200
+    assert resp.json() == {"ok": True}

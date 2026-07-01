@@ -146,6 +146,15 @@ def options(path: str, **kwargs: Any) -> Callable:
     return route("OPTIONS", path, **kwargs)
 
 
+# Attribute-style access — ``@route.get("/x")`` etc. Lets a Controller method be
+# named after an HTTP verb without shadowing the decorator: a bare ``from rivex
+# import get`` is rebound by ``def get(self): ...`` in the class body (Python
+# class-scope name binding), but ``route`` isn't. ``route("GET", "/x")`` still works.
+for _verb in (get, post, put, delete, patch, head, options):
+    setattr(route, _verb.__name__, _verb)
+del _verb
+
+
 class Controller:
     path: str = ""
     tags: list[str] = []
