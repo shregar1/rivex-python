@@ -90,12 +90,35 @@ class Request:
         return self._body
 
     def body_json(self) -> Any:
-        """Parse JSON body synchronously."""
+        """Parse JSON body synchronously.
+
+        Raises :class:`RequestBodyError` on invalid input. The
+        underlying ``json.JSONDecodeError`` is chained via
+        ``__cause__`` for full traceback context.
+        """
         if not self._body:
             return None
-        if HAS_CORE:
-            return _rc.json_deserialize(self._body)
-        return json.loads(self._body)
+        try:
+            if HAS_CORE:
+                return _rc.json_deserialize(self._body)
+            return json.loads(self._body)
+        except Exception as exc:
+            # Wrap the raw JSON / Rust error in a request-aware
+            # exception so the user can see the method, path, and
+            # a body preview alongside the parse failure.
+            from rivex.exceptions import RequestBodyError
+
+            preview = self._body[:200]
+            try:
+                preview_str = preview.decode("utf-8", errors="replace")
+            except Exception:
+                preview_str = repr(preview)
+            raise RequestBodyError(
+                method=self.method,
+                path=self.path,
+                body_preview=preview_str,
+                reason=f"{type(exc).__name__}: {exc}",
+            ) from exc
 
     async def json(self) -> Any:
         """Parse JSON body (FastAPI-compatible async API)."""

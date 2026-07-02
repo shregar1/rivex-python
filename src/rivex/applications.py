@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
 import signal
 from collections.abc import Callable, Iterator
@@ -12,6 +13,106 @@ from typing import Any
 import rivex_core
 from rivex._injection import build_handler_wrapper
 from rivex.routing import Controller, Router, RouteRecord, controller_to_router, is_controller
+
+
+def _make_hook_middleware(
+    before: list,
+    after: list,
+    after_resp: list,
+) -> Any:
+    """Build a Middleware subclass that runs the given hook lists.
+
+    Defined as a factory (rather than a closure that creates a new
+    class) so the class itself only exists once per ``(before,
+    after, after_resp)`` triple — repeated ``run()`` calls no longer
+    leak class objects into the GC heap.
+    """
+    from rivex.middleware import Middleware
+
+    class _HookMiddleware(Middleware):
+        async def process(self, request_data, call_next):
+            import asyncio as _aio
+
+            for hook in before:
+                result = hook(request_data)
+                if _aio.iscoroutine(result):
+                    result = await result
+                if isinstance(result, dict):
+                    return result
+
+            response = await call_next(request_data)
+
+            for hook in after:
+                modified = hook(request_data, response)
+                if _aio.iscoroutine(modified):
+                    modified = await modified
+                if isinstance(modified, dict):
+                    response = modified
+
+            for hook in after_resp:
+                try:
+                    result = hook(request_data, response)
+                    if _aio.iscoroutine(result):
+                        await result
+                except Exception:
+                    pass
+
+            return response
+
+    return _HookMiddleware
+
+
+def _run_coroutine_sync(coro: Any) -> Any:
+    """Drive a coroutine to completion from a synchronous call site.
+
+    Works correctly in all four contexts:
+
+    1. No event loop on this thread (typical sync test setup):
+       use ``asyncio.run``.
+    2. Event loop exists but is not running: use ``run_until_complete``.
+    3. Event loop is running on this thread (the common request
+       handler / lifespan case): we cannot call ``run_until_complete``
+       on the same thread (it would deadlock) and ``asyncio.run`` is
+       forbidden from a running loop. Spin up a fresh loop on a
+       worker thread and drive the coroutine there.
+    4. Event loop is running on a different thread: same as (3) —
+       we run on a worker thread with its own loop to stay
+       independent of the caller's loop.
+
+    Returns the coroutine's result.
+    """
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+
+    if loop is None:
+        return asyncio.run(coro)
+
+    if not loop.is_running():
+        return loop.run_until_complete(coro)
+
+    # A loop is running on this thread. We can't use
+    # ``asyncio.run_coroutine_threadsafe`` from this thread either
+    # — the future would never resolve because the loop is blocked
+    # waiting for us. The safe path is to drive the coroutine on a
+    # fresh worker thread with its own loop.
+    import threading
+
+    holder: dict[str, Any] = {}
+
+    def _worker() -> None:
+        try:
+            holder["result"] = asyncio.run(coro)
+        except BaseException as e:  # noqa: BLE001
+            holder["error"] = e
+
+    t = threading.Thread(target=_worker, daemon=True)
+    t.start()
+    t.join()
+    if "error" in holder:
+        raise holder["error"]
+    return holder.get("result")
 
 
 class Rivex:
@@ -356,6 +457,12 @@ class Rivex:
             async def sse_handler(request_data: dict) -> dict:
                 path_params = request_data.get("path_params", {})
                 raw = func(**path_params)
+                # ``func`` may be sync, async, or an async generator.
+                # In all three cases the SSE stream must be a real
+                # iterator of SSE-formatted chunks, not a coroutine or
+                # async-generator object that nobody awaits.
+                if inspect.isawaitable(raw):
+                    raw = await raw
                 formatted = _coerce_sse(raw)
                 resp = EventSourceResponse(content=formatted)
                 return resp._to_raw()
@@ -444,7 +551,11 @@ class Rivex:
     ) -> None:
         if is_controller(router):
             router = controller_to_router(router)  # type: ignore[arg-type]
-        assert isinstance(router, Router)
+        if not isinstance(router, Router):
+            raise TypeError(
+                f"include_router expected a Router (or Controller), "
+                f"got {type(router).__name__}: {router!r}"
+            )
 
         from rivex.routing import _LifecycleHookMiddleware
 
@@ -987,7 +1098,7 @@ class Rivex:
             if mod is None:
                 continue
             app = getattr(mod, "app", None)
-            if isinstance(app, _Rivex):
+            if isinstance(app, Rivex):
                 target = app
                 break
         if target is None:
@@ -1000,7 +1111,7 @@ class Rivex:
                         attr = getattr(mod, attr_name)
                     except Exception:
                         continue
-                    if isinstance(attr, _Rivex):
+                    if isinstance(attr, Rivex):
                         target = attr
                         break
                 if target is not None:
@@ -1120,8 +1231,14 @@ class Rivex:
             nonlocal _in_flight
             _in_flight -= 1
 
-        self._before_request_hooks.append(_track_before)
-        self._after_response_hooks.append(_track_after)
+        # Guard against re-registration: ``_drive_rust_server`` may
+        # be called multiple times if the user calls ``run()``
+        # repeatedly on the same app. Without this, the tracking
+        # closures pile up and ``_in_flight`` gets double-counted.
+        if not getattr(self, "_track_hooks_installed", False):
+            self._before_request_hooks.append(_track_before)
+            self._after_response_hooks.append(_track_after)
+            self._track_hooks_installed = True
 
         from rivex.middleware import CORSMiddleware
 
@@ -1129,6 +1246,11 @@ class Rivex:
             isinstance(cls, type) and issubclass(cls, CORSMiddleware) for cls, _ in self._middleware
         )
         registered_paths: set[str] = set()
+        # Map path → host constraint so the CORS preflight (OPTIONS)
+        # registration below can carry the same host filter; otherwise
+        # preflights would respond on every host, leaking the route to
+        # untrusted domains.
+        path_hosts: dict[str, str | None] = {}
 
         exc_handlers = self._exception_handlers if self._exception_handlers else None
         dep_overrides = self.dependency_overrides if self.dependency_overrides else None
@@ -1182,9 +1304,11 @@ class Rivex:
                 except TypeError:
                     server.add_route(record.method, record.path, handler)
                 registered_paths.add(record.path)
+                path_hosts[record.path] = record.host
                 continue
             server.add_route(record.method, record.path, handler)
             registered_paths.add(record.path)
+            path_hosts[record.path] = None
 
             # If the bake succeeded, register the same response as a
             # Rust-side const route too. The Rust listener checks the
@@ -1264,7 +1388,17 @@ class Rivex:
 
             for path in registered_paths:
                 handler = self._apply_middleware(_noop)
-                server.add_route("OPTIONS", path, handler)
+                # NB: use a distinct name — reusing ``host`` here would clobber
+                # the server *bind address* parameter of this method, so a CORS
+                # app would later call ``server.run(None, port)`` and crash.
+                route_host = path_hosts.get(path)
+                if route_host:
+                    try:
+                        server.add_route("OPTIONS", path, handler, host=route_host)
+                    except TypeError:
+                        server.add_route("OPTIONS", path, handler)
+                else:
+                    server.add_route("OPTIONS", path, handler)
 
         if self.openapi_url:
             self._register_openapi_routes(server, registered_paths)
@@ -1653,98 +1787,40 @@ class Rivex:
         after = self._after_request_hooks
         after_resp = self._after_response_hooks
 
-        from rivex.middleware import Middleware
+        # Bind the lists at instance construction time so the module-
+        # level _HookMiddleware (defined once, not regenerated on
+        # every ``_drive_rust_server`` call) can use them via
+        # closure over a factory.
+        def _factory() -> Any:
+            return _make_hook_middleware(before, after, after_resp)
 
-        class _HookMiddleware(Middleware):
-            async def process(self, request_data, call_next):
-                import asyncio as _aio
-
-                # before_request hooks
-                for hook in before:
-                    result = hook(request_data)
-                    if _aio.iscoroutine(result):
-                        result = await result
-                    if isinstance(result, dict):
-                        return result
-
-                response = await call_next(request_data)
-
-                # after_request hooks
-                for hook in after:
-                    modified = hook(request_data, response)
-                    if _aio.iscoroutine(modified):
-                        modified = await modified
-                    if isinstance(modified, dict):
-                        response = modified
-
-                # after_response hooks (fire and forget)
-                for hook in after_resp:
-                    try:
-                        result = hook(request_data, response)
-                        if _aio.iscoroutine(result):
-                            await result
-                    except Exception:
-                        pass
-
-                return response
-
-        return _HookMiddleware
+        return _factory
 
     def _apply_middleware(self, handler: Callable) -> Callable:
-        wrapped = handler
-        for middleware_cls, kwargs in reversed(self._middleware):
-            mw = middleware_cls(**kwargs)
-            inner = wrapped
+        from rivex._mw_utils import apply_middleware_chain
 
-            async def make_handler(
-                request_data: dict,
-                *,
-                _mw: Any = mw,
-                _next: Callable = inner,
-            ) -> dict:
-                process = getattr(_mw, "process", None)
-                if callable(process):
-                    result = process(request_data, _next)
-                else:
-                    result = _mw(request_data, _next)
-                if asyncio.iscoroutine(result):
-                    result = await result
-                resp: dict = result
-                return resp
-
-            wrapped = make_handler
-        return wrapped
+        return apply_middleware_chain(handler, self._middleware)
 
     def _run_hooks(self, hooks: list[Callable]) -> None:
         for hook in hooks:
             if asyncio.iscoroutinefunction(hook):
-                try:
-                    loop = asyncio.get_running_loop()
-                except RuntimeError:
-                    loop = None
-                if loop and loop.is_running():
-                    loop.run_until_complete(hook())
-                else:
-                    asyncio.run(hook())
+                _run_coroutine_sync(hook())
             else:
                 hook()
 
     @staticmethod
     def _run_async(coro: Any) -> None:
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            asyncio.run(coro)
-        else:
-            if loop.is_running():
-                loop.create_task(coro)
-            else:
-                loop.run_until_complete(coro)
+        _run_coroutine_sync(coro)
 
     def _enter_lifespan(self) -> Any:
-        # Auto-connect database pools
-        if self._db._configs:
-            self._run_async(self._db.connect_all())
+        # Guard against re-entry: if the lifespan is already active,
+        # return the current state without trying to re-connect DB
+        # pools or re-enter the user's context manager.
+        if getattr(self, "_lifespan_state", None) is not None:
+            return self._lifespan_state
+        # Auto-connect database pools (skip if already connected).
+        if self._db._configs and not getattr(self._db, "_connected", False):
+            _run_coroutine_sync(self._db.connect_all())
 
         if self.lifespan is None:
             return None
@@ -1753,19 +1829,24 @@ class Rivex:
         enter = getattr(context, "__enter__", None)
         if callable(enter):
             enter()
-            return ("sync", context)
+            self._lifespan_state = ("sync", context)
+            return self._lifespan_state
 
         async_enter = getattr(context, "__aenter__", None)
         if callable(async_enter):
-            asyncio.run(async_enter())
-            return ("async", context)
+            _run_coroutine_sync(async_enter())
+            self._lifespan_state = ("async", context)
+            return self._lifespan_state
 
         raise TypeError("lifespan must return a context manager")
 
     def _exit_lifespan(self, state: Any) -> None:
+        # Reset the re-entry guard so a future ``_enter_lifespan``
+        # starts fresh.
+        self._lifespan_state = None
         # Auto-disconnect database pools
         if self._db._connected:
-            self._run_async(self._db.disconnect_all())
+            _run_coroutine_sync(self._db.disconnect_all())
 
         if state is None:
             return
@@ -1774,12 +1855,7 @@ class Rivex:
         if mode == "sync":
             context.__exit__(None, None, None)
         else:
-            asyncio.run(context.__aexit__(None, None, None))
-
-    # Internal alias used by the multi-process supervisor (see
-    # ``_run_async_multi_process``). Set after the class body so
-    # the helper can isinstance-check without a circular import.
-    _Rivex_self = None
+            _run_coroutine_sync(context.__aexit__(None, None, None))
 
     # ── ASGI interface ──
 
@@ -1799,6 +1875,9 @@ class Rivex:
 FastAPI = Rivex
 
 # Used by the multi-process supervisor in ``_run_async_multi_process``.
-# Setting it at module level (after the class body) so the helper
-# can isinstance-check without a circular import.
-_Rivex = Rivex
+# Previously aliased to ``Rivex`` here at module level (after the
+# class body) so isinstance checks inside the class could reference
+# it. That was fragile (worked only because of Python's late name
+# resolution). The isinstance sites now reference ``Rivex`` directly
+# — the class is in scope at call time, so this is safe and removes
+# the order-of-evaluation hazard.

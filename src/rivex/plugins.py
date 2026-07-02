@@ -116,6 +116,15 @@ def load_plugins(group: str) -> dict[str, Callable[..., Any]]:
     for ep in selected:
         try:
             out[ep.name] = ep.load()
+        except (ImportError, SyntaxError) as exc:
+            # These are the user's bug, not a transient runtime
+            # problem — surface them as warnings with extra context
+            # so the failure isn't silently lost.
+            warnings.warn(
+                f"rivex.plugins: failed to load `{group}:{ep.name}` — "
+                f"{type(exc).__name__}: {exc}",
+                stacklevel=2,
+            )
         except Exception as exc:  # pragma: no cover
             warnings.warn(
                 f"rivex.plugins: failed to load `{group}:{ep.name}` — {exc}",

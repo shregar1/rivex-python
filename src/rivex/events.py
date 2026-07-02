@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
+import warnings
 from collections.abc import Callable
 from typing import Any
 
@@ -21,11 +23,27 @@ class Signal:
         ]
 
     def send(self, sender: Any = None, **kwargs: Any) -> list:
-        """Send signal synchronously. Returns list of (receiver, response) tuples."""
+        """Send signal synchronously. Returns list of (receiver, response) tuples.
+
+        .. note::
+            Receivers registered with ``async def`` are NOT awaited
+            here — they are called and the resulting coroutine
+            object is stored. To dispatch to async receivers, use
+            :meth:`send_async` instead. The mismatch is detected
+            and a one-shot warning is emitted per receiver.
+        """
         results = []
         for receiver, bound_sender in self._receivers:
             if bound_sender is not None and bound_sender is not sender:
                 continue
+            if inspect.iscoroutinefunction(receiver):
+                warnings.warn(
+                    f"Signal {self.name!r}: receiver {receiver!r} is a "
+                    f"coroutine function; use send_async() to await it. "
+                    f"send() will return the coroutine object without "
+                    f"executing it.",
+                    stacklevel=2,
+                )
             result = receiver(sender=sender, **kwargs)
             results.append((receiver, result))
         return results

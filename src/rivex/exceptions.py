@@ -24,6 +24,30 @@ class RequestValidationError(HTTPException):
         return self.errors_list
 
 
+class RequestBodyError(HTTPException):
+    """Raised when the request body cannot be parsed.
+
+    Carries the request method, path, a body preview (truncated to
+    200 bytes), and the underlying parser reason so debugging
+    webhook handlers and the like doesn't require correlating
+    stack traces with access logs.
+    """
+
+    def __init__(
+        self,
+        method: str,
+        path: str,
+        body_preview: str,
+        reason: str,
+    ):
+        self.method = method
+        self.path = path
+        self.body_preview = body_preview
+        self.reason = reason
+        detail = f"Invalid request body for {method} {path}: {reason}"
+        super().__init__(status_code=400, detail=detail)
+
+
 class WebSocketDisconnect(Exception):
     def __init__(self, code: int = 1000, reason: str = ""):
         self.code = code

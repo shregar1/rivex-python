@@ -64,6 +64,7 @@ def serve(
     workers: int = 1,
     reload: bool = False,
     log_level: str | None = None,
+    app_var: str | None = None,
     **kwargs: Any,
 ) -> None:
     """Serve a Rivex app via uvicorn.
@@ -82,10 +83,18 @@ def serve(
         log_level: uvicorn log level (``"debug"``, ``"info"``,
             ``"warning"``, ``"error"``, ``"critical"``). Default
             ``"info"`` (or ``"debug"`` if ``app.debug``).
+        app_var: The ``"module:attr"`` import path to the app
+            instance, required when ``workers > 1``. Example:
+            ``app_var="my_module:app"``. Without it, multi-worker
+            mode raises because we cannot infer the user's
+            module from the ``Rivex`` instance (its
+            ``__module__`` is always ``"rivex.applications"``,
+            not the user's module).
         **kwargs: Forwarded to ``uvicorn.Config``.
 
     Raises:
         ImportError: if uvicorn is not installed.
+        ValueError: if ``workers > 1`` and ``app_var`` is missing.
     """
     try:
         import uvicorn
@@ -100,6 +109,23 @@ def serve(
     if log_level is None:
         log_level = "info" if not getattr(app, "debug", False) else "debug"
 
+    if workers > 1:
+        # uvicorn's multi-worker mode requires a stable
+        # ``module:attr`` import string so the worker processes can
+        # re-import the app. The app's ``__module__`` is always
+        # ``rivex.applications`` (the class's defining module), not
+        # the user's module, so we cannot infer it. Require the
+        # caller to pass ``app_var`` explicitly.
+        if not app_var:
+            raise ValueError(
+                "Multi-worker uvicorn mode (workers>1) requires the "
+                "`app_var` argument so the worker processes can "
+                "re-import the app. Pass `app_var='your_module:app'` "
+                "(the same string you'd give to the uvicorn CLI), or "
+                "use the CLI form directly:\n"
+                "    uvicorn your_module:app --workers 4"
+            )
+
     config = uvicorn.Config(
         app,
         host=host,
@@ -113,42 +139,26 @@ def serve(
     )
 
     if workers > 1:
-        # uvicorn's multi-worker mode requires the CLI form
-        # because the workers fork from the parent. If the user
-        # passes workers>1 to this function, we run uvicorn
-        # in a subprocess with the right flags.
-        import sys
+        # Re-spawn as a uvicorn CLI with --workers so uvicorn
+        # can fork its worker supervisor. We use ``os.execvp`` so
+        # the current process is replaced — anything after this
+        # call is unreachable. Note: shutdown hooks / cleanup
+        # in this parent process do NOT run; the user is expected
+        # to put cleanup in lifespan hooks (which DO run in
+        # each worker).
         import os
-        import subprocess
+        import sys
 
-        # Find the module that defines `app` so the workers can
-        # re-import it. This is best-effort; the cleanest path is
-        # to use the CLI directly.
-        module_name = getattr(app, "__module__", None)
-        if module_name is None:
-            # Fall back to single-worker (uvicorn can't fork
-            # without an import path)
-            import warnings
-            warnings.warn(
-                f"Cannot start uvicorn with workers={workers}: app has no "
-                f"__module__. Falling back to single worker. Use the "
-                f"CLI for multi-worker: `uvicorn my_module:asgi_app --workers N`.",
-                stacklevel=2,
-            )
-            workers = 1
-
-        if workers > 1:
-            # Re-spawn as a uvicorn CLI with --workers.
-            argv = [
-                sys.executable, "-m", "uvicorn",
-                f"{module_name}:{asgi_app.__name__}",
-                "--host", host,
-                "--port", str(port),
-                "--workers", str(workers),
-                "--log-level", log_level,
-            ]
-            os.execvp(sys.executable, argv)
-            return  # unreachable
+        argv = [
+            sys.executable, "-m", "uvicorn",
+            app_var,
+            "--host", host,
+            "--port", str(port),
+            "--workers", str(workers),
+            "--log-level", log_level,
+        ]
+        os.execvp(sys.executable, argv)
+        return  # unreachable: os.execvp replaces the process
 
     server = uvicorn.Server(config)
     try:
@@ -177,5 +187,35 @@ def make_asgi_app(app: Any) -> Any:
     return app
 
 
-# Convenience alias for the CLI form
-asgi_app = None  # populated by the user after import
+def _resolve_asgi_app() -> Any:
+    """Resolve the module-level ``asgi_app`` reference.
+
+    Falls back to the most recently-created ``Rivex`` instance if
+    no explicit ``asgi_app`` was bound at module scope. Raises a
+    clear error if neither is available, rather than returning
+    ``None`` (which would let the CLI silently spin up a wrong
+    server).
+    """
+    global asgi_app
+    if asgi_app is not None:
+        return asgi_app
+    # Look at the module that imported us, in case the user
+    # bound the app under a different name in their entry module.
+    import sys
+
+    for module in list(sys.modules.values()):
+        candidate = getattr(module, "asgi_app", None)
+        if candidate is not None and not getattr(candidate, "__name__", "").startswith("rivex"):
+            asgi_app = candidate
+            return candidate
+    raise RuntimeError(
+        "No `asgi_app` found. Either bind it explicitly in your module:\n"
+        "    asgi_app = make_asgi_app(app)\n"
+        "or pass the app instance directly to serve()."
+    )
+
+
+# Convenience alias for the CLI form. Initially None; the user
+# is expected to assign it (see make_asgi_app above) or the
+# ``rivex`` CLI does it automatically.
+asgi_app = None

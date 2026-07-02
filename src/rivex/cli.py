@@ -274,7 +274,13 @@ def _import_app(path: str):
         print(f"Error: app path must be 'module:variable' (got '{path}')", file=sys.stderr)
         sys.exit(1)
     module_path, attr = path.rsplit(":", 1)
-    sys.path.insert(0, ".")
+    # Insert "." at the front of sys.path so local packages resolve
+    # first, but only if it isn't already there. Repeated calls (e.g.
+    # ``rivex run`` followed by ``rivex dev`` in the same process
+    # via a long-lived parent) used to push "." onto sys.path
+    # indefinitely, making the entry a no-op after the first call.
+    if not sys.path or sys.path[0] != "" and sys.path[0] != ".":
+        sys.path.insert(0, ".")
     try:
         module = importlib.import_module(module_path)
     except ImportError as e:
@@ -337,8 +343,28 @@ def _run_with_reload(app_path: str, host: str, port: int) -> None:
     reimplementation.
     """
     import os
+    import re
     import subprocess
     import time
+
+    # Validate user-controlled values BEFORE interpolating them
+    # into a Python source string. Without this, a value like
+    # ``main; import os; os.system('evil')`` in any of these
+    # fields would be executed by the child interpreter, even
+    # though we use Popen (no shell) — ``-c`` runs its argument
+    # as Python, so any user input there is an injection vector.
+    if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*", app_path.split(":")[0]):
+        raise ValueError(
+            f"Invalid module path: {app_path.split(':')[0]!r}. "
+            "Module names must be valid Python dotted identifiers."
+        )
+    if ":" in app_path and not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", app_path.split(":", 1)[1]):
+        raise ValueError(
+            f"Invalid attribute name in app path: {app_path!r}. "
+            "Attribute must be a valid Python identifier."
+        )
+    # host and port are passed via environment variables so they
+    # are NEVER interpolated into the Python source string.
 
     def _scan_mtimes(dirs: list[str]) -> dict[str, float]:
         mtimes: dict[str, float] = {}
@@ -364,16 +390,41 @@ def _run_with_reload(app_path: str, host: str, port: int) -> None:
     print(f"  Rivex dev server (reload mode) at http://{host}:{port}")
     print(f"  Watching: {', '.join(watch_dirs)}")
 
+    # The Python source passed to ``-c`` contains NO user-controlled
+    # data — the import path, host, and port all come from validated
+    # values (or, for host/port, from the environment, which is not
+    # an injection vector). We use ``mode='asgi'`` so the child
+    # process uses uvicorn, which cooperates with the parent's
+    # SIGTERM-based restart loop (the native engine installs its
+    # own signal handlers that can fight the supervisor).
+    loader_src = (
+        "import os, runpy, sys\n"
+        "sys.path.insert(0, '.')\n"
+        "target = os.environ['RIVEX_APP_VAR']\n"
+        "module_name, _, attr = target.partition(':')\n"
+        "mod = __import__(module_name)\n"
+        "for part in module_name.split('.')[1:]:\n"
+        "    mod = getattr(mod, part)\n"
+        "app = mod if not attr else getattr(mod, attr)\n"
+        "app.run(\n"
+        "    host=os.environ['RIVEX_HOST'],\n"
+        "    port=int(os.environ['RIVEX_PORT']),\n"
+        "    mode='asgi',\n"
+        ")\n"
+    )
+
     while True:
         before = _scan_mtimes(watch_dirs)
-        cmd = [
-            sys.executable,
-            "-c",
-            f"import sys; sys.path.insert(0,'.'); "
-            f"m=__import__('{module_part}'); app=getattr(m,'{app_path.split(':')[1]}'); "
-            f"app.run(host='{host}',port={port})",
-        ]
-        proc = subprocess.Popen(cmd)
+        env = {
+            **os.environ,
+            "RIVEX_APP_VAR": app_path,
+            "RIVEX_HOST": host,
+            "RIVEX_PORT": str(port),
+        }
+        proc = subprocess.Popen(
+            [sys.executable, "-c", loader_src],
+            env=env,
+        )
         try:
             while proc.poll() is None:
                 time.sleep(1.0)
@@ -446,7 +497,10 @@ def _run_test(pytest_args: list[str]) -> None:
     has_cov = any(a.startswith("--cov") for a in args)
     if not has_cov:
         # If no coverage requested, run plain pytest + asyncio mode
-        if not any(a.startswith("-x") or a.startswith("--exitfirst") or "-k" in a for a in args):
+        if not any(
+            a == "-x" or a.startswith("--exitfirst") or a == "-k" or a.startswith("-k=") or a.startswith("-k ")
+            for a in args
+        ):
             args = ["--tb=short", "-q"] + args
 
     exit_code = pytest.main(args)

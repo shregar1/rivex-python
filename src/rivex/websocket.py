@@ -20,20 +20,53 @@ class WebSocketState(IntEnum):
 
 
 class WebSocket:
+    """Low-level asyncio-Stream-based WebSocket.
+
+    .. deprecated::
+        This class is the legacy implementation that speaks the
+        WebSocket protocol over a raw ``asyncio.StreamReader`` /
+        ``StreamWriter``. The main path in ``applications.py`` uses
+        ``rivex.websockets.WebSocket`` (the async wrapper over
+        ``rivex_core.PyWebSocket``) — which is what the
+        ``@app.websocket`` decorator and ``add_websocket_route``
+        dispatch through.
+
+        This class is kept only as a typing reference for the
+        ``ConnectionManager`` helper in ``rivex.ws``. New code
+        should import from ``rivex.websockets`` instead.
+
+    The constructor accepts the (scope, reader, writer) triple for
+    backwards compatibility, but also tolerates a single ``raw``
+    argument (the Rust ``PyWebSocket``) to match the
+    ``websockets.py`` call signature, so the two modules' types
+    don't collide at import time.
+    """
+
     def __init__(
         self,
-        scope: dict[str, Any],
-        reader: asyncio.StreamReader,
-        writer: asyncio.StreamWriter,
+        scope_or_raw: Any,
+        reader: asyncio.StreamReader | None = None,
+        writer: asyncio.StreamWriter | None = None,
     ):
-        self.scope = scope
-        self._reader = reader
-        self._writer = writer
+        # Two-arg call form: WebSocket(raw_ws) — same shape as
+        # rivex.websockets.WebSocket. We don't have a real reader/
+        # writer in that case; the wrapper provides them lazily.
+        if reader is None and writer is None:
+            self.scope: dict[str, Any] = {}
+            self._raw = scope_or_raw
+            self._reader = None  # type: ignore[assignment]
+            self._writer = None  # type: ignore[assignment]
+        else:
+            self.scope = scope_or_raw
+            self._raw = None
+            self._reader = reader
+            self._writer = writer
+
         self.client_state = WebSocketState.CONNECTING
-        self.path = scope.get("path", "/")
-        self.query_string = scope.get("query_string", "")
-        self.path_params: dict[str, str] = scope.get("path_params", {})
-        self.headers: dict[str, str] = scope.get("headers", {})
+        self.path = self.scope.get("path", "/")
+        self.query_string = self.scope.get("query_string", "")
+        self.path_params: dict[str, str] = self.scope.get("path_params", {})
+        self.headers: dict[str, str] = self.scope.get("headers", {})
 
     async def accept(self, subprotocol: str | None = None) -> None:
         key = self.headers.get("sec-websocket-key", "")
