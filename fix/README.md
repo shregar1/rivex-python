@@ -18,5 +18,6 @@ This directory documents issues found in the rivex Python SDK (v0.1.0). Each fil
 | 14 | `14-asgi-dead-code.md` | LOW | Dead `len(self._handlers)` no-op in `ASGIAdapter._build()` |
 | 15 | `15-cors-origin-bypass.md` | MEDIUM | CORS allows arbitrary origin when not in allow list |
 | 16 | `16-body-json-error.md` | LOW | `Request.body_json()` raises bare `JSONDecodeError` without request context |
+| 17 | `17-multipart-file-scalar-binding.md` | HIGH | Scalar sibling of `File()` silently bound to query-only, never multipart body; `Form()`-DTO validation chokes on `extra="forbid"` |
 
-**Totals:** 11 HIGH, 3 MEDIUM, 2 LOW = 16 issues documented.
+**Totals:** 12 HIGH, 3 MEDIUM, 2 LOW = 17 issues documented.
