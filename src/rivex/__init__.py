@@ -399,7 +399,7 @@ from rivex._bodies import (
     register_body_schema,
 )
 
-__version__ = "0.2.2"
+__version__ = "0.2.3"
 __all__ = [
     # Core
     "Rivex",

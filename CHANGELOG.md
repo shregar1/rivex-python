@@ -6,7 +6,19 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-07-10
+
 ### Fixed
+- **Boot crash for CORS-enabled apps: `TypeError: argument 'host':
+  'NoneType' object cannot be converted to 'PyString'`.** In 0.2.2 the
+  CORS-preflight registration loop in
+  `Rivex._drive_rust_server` reused the name `host` for the per-route
+  host constraint (`host = path_hosts.get(path)`), shadowing the
+  method's server bind-address parameter. When the last registered
+  path had no host constraint — the common case — the final
+  `server.run(host, port)` received `None` and every CORS-enabled app
+  with routes crashed at startup. The loop local is now `route_host`,
+  and `tests/test_cors_preflight_host_regression.py` pins the fix.
 - **`Body()` with a DTO type hint now returns a validated DTO instance**
   instead of the raw JSON dict. Previously `payload: MyDto = Body()`
   passed the parsed JSON straight through and `payload.field` raised
