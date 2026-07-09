@@ -207,14 +207,41 @@ class StreamingResponse(Response):
                         result.append(chunk)
                 return result
 
+            # Three cases to handle:
+            #   1. No running loop: ``asyncio.run`` works fine.
+            #   2. Running loop on this thread: ``run_until_complete``
+            #      would deadlock and ``asyncio.run`` is forbidden
+            #      from a running loop. Drive the coroutine on a
+            #      worker thread that owns a fresh loop.
+            #   3. Running loop on another thread: same as (2) —
+            #      run on a worker thread to stay independent.
             try:
                 loop = asyncio.get_running_loop()
             except RuntimeError:
                 loop = None
-            if loop and loop.is_running():
-                chunks = loop.run_until_complete(_collect())
+
+            if loop is None or not loop.is_running():
+                if loop is not None:
+                    chunks = loop.run_until_complete(_collect())
+                else:
+                    chunks = asyncio.run(_collect())
             else:
-                chunks = asyncio.run(_collect())
+                import threading
+
+                holder: dict[str, Any] = {}
+
+                def _worker() -> None:
+                    try:
+                        holder["chunks"] = asyncio.run(_collect())
+                    except BaseException as e:  # noqa: BLE001
+                        holder["error"] = e
+
+                t = threading.Thread(target=_worker, daemon=True)
+                t.start()
+                t.join()
+                if "error" in holder:
+                    raise holder["error"]
+                chunks = holder.get("chunks", [])
         else:
             for chunk in self._stream:
                 if isinstance(chunk, str):

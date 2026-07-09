@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import concurrent.futures
 import inspect
+import threading
 from collections.abc import Callable
 from math import isfinite as _math_isfinite
 from typing import Any, cast, get_type_hints
@@ -41,6 +42,20 @@ _DEP_SIG_CACHE: dict[Callable, tuple[inspect.Signature, dict[str, Any]]] = {}
 # across requests so providers annotated with ``scope="singleton"`` are
 # created exactly once.
 _SINGLETON_CACHE: dict[Any, Any] = {}
+# A module-level lock that serialises read-modify-write of
+# ``_SINGLETON_CACHE``. Without it, two threads racing to construct
+# a singleton for the first time can both miss the cache, both
+# build the value, and one will overwrite the other — breaking
+# the singleton guarantee. We use a regular ``threading.Lock``
+# (not an ``RLock``) because the critical sections are short and
+# non-reentrant.
+_SINGLETON_CACHE_LOCK = threading.Lock()
+
+
+# Valid ``source`` values accepted by the codegen wrapper. Hoisted
+# to module level (was rebuilt on every ``build_handler_wrapper``
+# call before the refactor).
+_CODEGEN_SOURCES = ("request", "path", "query", "body", "body_raw")
 
 
 def _get_cached_signature(func: Callable) -> tuple[inspect.Signature, dict[str, Any]]:
@@ -398,9 +413,17 @@ def _extract_body_param(ctx: Any, name: str, hint: Any, default: Any) -> Any:
     from rivex.exceptions import RequestValidationError
 
     if not ctx.body:
-        if not default.required:
-            return default.default
-        return default.default  # not present; the default applies
+        if default.required:
+            raise RequestValidationError(
+                [
+                    {
+                        "loc": ("body",),
+                        "msg": "Field required: request body is empty",
+                        "type": "missing",
+                    }
+                ]
+            )
+        return default.default
 
     # When the hint is a body model (Pydantic, schemax, dataclass, …) and the
     # field is not ``embed``ed, the user wants a validated DTO instance, not
@@ -599,8 +622,16 @@ def build_handler_wrapper(
     from rivex.uploads import File, Form, UploadFile
 
     # ``CompiledGen`` lives in the Rust core (not always present in
-    # test envs). Import it lazily at the call site.
-    _CompiledGen = None  # type: ignore[assignment]
+    # test envs). Try to import it; fall back to ``None`` if the
+    # native extension isn't available so the rest of the wrapper
+    # builder still works in pure-Python environments.
+    _CompiledGen: type | None = None
+    try:
+        import rivex_core as _rc_for_gen  # noqa: F401
+
+        _CompiledGen = getattr(_rc_for_gen, "CompiledGen", None)
+    except Exception:
+        _CompiledGen = None
 
     if isinstance(func, _CachedWrapper):
 
@@ -723,7 +754,6 @@ def build_handler_wrapper(
         direct_wrapper._rivex_skip_request = True  # type: ignore[attr-defined]
         return direct_wrapper
 
-    _CODEGEN_SOURCES = ("request", "path", "query", "body", "body_raw")
     if all(s in _CODEGEN_SOURCES for s, *_ in params_info):
         return _build_codegen_wrapper(
             func=func,
@@ -1158,7 +1188,16 @@ async def _resolve_depends(
         result = await result
 
     if scope == "singleton":
-        _SINGLETON_CACHE[provider] = result
+        # First-writer wins: take the lock, re-check, and only
+        # store the value if no other thread got there first.
+        # The losing thread's ``result`` is discarded — that is
+        # wasteful but the singleton guarantee is preserved.
+        with _SINGLETON_CACHE_LOCK:
+            existing = _SINGLETON_CACHE.get(provider)
+            if existing is None:
+                _SINGLETON_CACHE[provider] = result
+            else:
+                result = existing
     elif scope == "request" and dep.use_cache:
         cache[provider] = result
 
@@ -1302,6 +1341,44 @@ def _coerce(value: str, hint: Any) -> Any:
     # Peel ``X | None`` so query/header/path params declared as
     # ``int | None = Query(...)`` still hit the numeric branch.
     hint = _coerce_optional_hint(hint)
+
+    # Recursively unwrap generic containers like ``list[str]`` /
+    # ``Optional[list[int]]`` / ``dict[str, int]`` so primitive
+    # coercion can target the element type. Empty ``value`` is
+    # returned as-is (the caller is responsible for the empty-list
+    # vs missing-list distinction).
+    import typing
+
+    origin = typing.get_origin(hint)
+    if origin in (list, tuple, set, frozenset):
+        if not value:
+            return value
+        elem_hint = typing.get_args(hint)[0] if typing.get_args(hint) else str
+        # Comma-separated values are the de-facto convention for
+        # query strings (``?ids=1,2,3``).
+        parts = [p.strip() for p in value.split(",") if p.strip()]
+        coerced = [_coerce(p, elem_hint) for p in parts]
+        if origin is list:
+            return coerced
+        if origin is tuple:
+            return tuple(coerced)
+        if origin is set:
+            return set(coerced)
+        return frozenset(coerced)
+    if origin is dict:
+        # ``?k1=v1&k2=v2`` style — split on commas for pairs and
+        # ampersands for entries.
+        if not value:
+            return value
+        key_hint, val_hint = typing.get_args(hint) if typing.get_args(hint) else (str, str)
+        out: dict = {}
+        for entry in value.split(","):
+            if "=" not in entry:
+                continue
+            k, v = entry.split("=", 1)
+            out[_coerce(k.strip(), key_hint)] = _coerce(v.strip(), val_hint)
+        return out
+
     if RC_V2:
         target = {int: "int", float: "float", bool: "bool"}.get(hint)
         if target:

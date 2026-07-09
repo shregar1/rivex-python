@@ -130,15 +130,24 @@ class CORSMiddleware(Middleware):
             )
         if "*" in self.allow_origins:
             if self.allow_credentials:
-                allowed_origin = request_origin or "*"
+                # Wildcard + credentials is invalid per spec; reflect the
+                # request origin so the browser enforces it. If there is
+                # no request origin, omit the header (no echo possible).
+                if not request_origin:
+                    return []
+                allowed_origin = request_origin
             else:
                 allowed_origin = "*"
         elif request_origin and request_origin in self.allow_origins:
             allowed_origin = request_origin
-        elif request_origin:
-            allowed_origin = self.allow_origins[0] if self.allow_origins else ""
         else:
-            allowed_origin = self.allow_origins[0] if self.allow_origins else ""
+            # Request origin is not in the allow list (or there is no
+            # request origin at all). Do NOT silently pick a fallback
+            # origin from the list — that violates least surprise and
+            # has been a source of CORS misconfigurations. Omit the
+            # entire CORS header set so non-browser clients don't see
+            # a misleading `Access-Control-Allow-Origin`.
+            return []
 
         headers: list[tuple[str, str]] = [
             ("access-control-allow-origin", allowed_origin),

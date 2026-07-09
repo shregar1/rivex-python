@@ -219,11 +219,16 @@ class _LifecycleHookMiddleware:
     async def process(self, request_data: dict, call_next: Callable) -> dict:
         import asyncio as _aio
 
+        # Match the app-level hook short-circuit semantics: any
+        # ``dict`` returned by a ``before_request`` hook short-
+        # circuits the request. The previous "must have 'status'"
+        # rule meant that app-level and router-level hooks behaved
+        # inconsistently for the same return value.
         for hook in self._before:
             result = hook(request_data)
             if _aio.iscoroutine(result):
                 result = await result
-            if isinstance(result, dict) and "status" in result:
+            if isinstance(result, dict):
                 return result
         response: dict = await call_next(request_data)
         for hook in self._after:
@@ -443,7 +448,11 @@ class Router:
     ) -> None:
         if is_controller(router):
             router = controller_to_router(router)  # type: ignore[arg-type]
-        assert isinstance(router, Router)
+        if not isinstance(router, Router):
+            raise TypeError(
+                f"include_router expected a Router (or Controller), "
+                f"got {type(router).__name__}: {router!r}"
+            )
         # Flush any route groups on the child router
         for grp in getattr(router, "_groups", []):
             grp.flush()

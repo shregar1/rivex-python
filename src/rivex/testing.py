@@ -8,6 +8,7 @@ from urllib.parse import urlencode, urlsplit
 
 import rivex_core
 from rivex._injection import build_handler_wrapper
+from rivex.applications import _run_coroutine_sync
 
 
 @dataclass
@@ -123,7 +124,7 @@ class TestClient:
 
             outer_chain = _wrap
 
-        raw = asyncio.run(outer_chain(request_data))
+        raw = _run_coroutine_sync(outer_chain(request_data))
 
         # Optionally follow 3xx redirects (off by default, matching the prior
         # behaviour of returning the redirect response as-is). 303 — and 301/302

@@ -97,12 +97,20 @@ class ASGIAdapter:
                     (record.method, record.path, handler)
                 )
                 continue
-            len(self._handlers)
             self._handlers.append(handler)
             try:
                 self._asgi_router.add_route(record.method, record.path, handler)
             except ValueError:
-                pass
+                # Surface duplicate route registration as a
+                # warning instead of silently swallowing it. The
+                # previous silent-pass hid bugs where a route
+                # appeared registered but actually wasn't.
+                import warnings
+
+                warnings.warn(
+                    f"Duplicate ASGI route: {record.method} {record.path}",
+                    stacklevel=2,
+                )
 
         for ws_path, ws_handler in self._app._ws_routes:
             self._ws_handlers[ws_path] = ws_handler
@@ -137,29 +145,9 @@ class ASGIAdapter:
                 pass
 
     def _apply_middleware(self, handler: Callable) -> Callable:
-        wrapped = handler
-        for middleware_cls, kwargs in reversed(self._app._middleware):
-            mw = middleware_cls(**kwargs)
-            inner = wrapped
+        from rivex._mw_utils import apply_middleware_chain
 
-            async def make_handler(
-                request_data: dict,
-                *,
-                _mw: Any = mw,
-                _next: Callable = inner,
-            ) -> dict:
-                process = getattr(_mw, "process", None)
-                if callable(process):
-                    result = process(request_data, _next)
-                else:
-                    result = _mw(request_data, _next)
-                if asyncio.iscoroutine(result):
-                    result = await result
-                resp: dict = result
-                return resp
-
-            wrapped = make_handler
-        return wrapped
+        return apply_middleware_chain(handler, self._app._middleware)
 
     async def __call__(
         self,
@@ -420,12 +408,24 @@ class ASGIAdapter:
         while True:
             message = await receive()
             if message["type"] == "lifespan.startup":
-                state = self._app._enter_lifespan()
-                self._app._run_hooks(self._app._startup_hooks)
+                try:
+                    state = self._app._enter_lifespan()
+                    self._app._run_hooks(self._app._startup_hooks)
+                except Exception:
+                    # Per ASGI 3.0 spec, a failed startup MUST be reported
+                    # via `lifespan.startup.failed` so servers (uvicorn,
+                    # hypercorn, daphne) can surface the error and shut
+                    # down cleanly instead of hanging.
+                    await send({"type": "lifespan.startup.failed", "message": "startup failed"})
+                    return
                 await send({"type": "lifespan.startup.complete"})
             elif message["type"] == "lifespan.shutdown":
-                self._app._run_hooks(self._app._shutdown_hooks)
-                self._app._exit_lifespan(state)
+                try:
+                    self._app._run_hooks(self._app._shutdown_hooks)
+                    self._app._exit_lifespan(state)
+                except Exception:
+                    await send({"type": "lifespan.shutdown.failed", "message": "shutdown failed"})
+                    return
                 await send({"type": "lifespan.shutdown.complete"})
                 return
 
