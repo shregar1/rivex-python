@@ -40,7 +40,6 @@ Cross-language world-bench on Azure D4s_v5 (4 vCPU, 16 GB) against 12 frameworks
 | h2o | C | 258,581 | 259,340 |
 | hyper | Rust | 233,844 | 236,424 |
 | **Rivex** | **Python** | **233,744** | **234,614** |
-| **Rivex (core)** | **Rust** | **232,837** | **235,809** |
 | warp | Rust | 228,801 | 229,339 |
 | fasthttp | Go | 213,744 | 214,418 |
 | axum | Rust | 210,534 | 213,871 |
