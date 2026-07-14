@@ -260,7 +260,7 @@ def test_createsuperuser_routes_to_admin_cli(tmp_path, monkeypatch, capsys):
     top-level CLI and reaches the admin store.  We use stdin to
     feed the interactive prompt."""
     import os
-import subprocess
+    import subprocess
 
     # Provide username + an empty token (auto-generate) via stdin.
     result = subprocess.run(

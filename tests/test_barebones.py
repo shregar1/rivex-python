@@ -169,8 +169,7 @@ def test_rivex_createsuperuser_works_in_barebones() -> None:
     ``RIVEX_ADMIN_DB`` env-var path and the printed-once token.
     """
     import os
-    import os
-import subprocess
+    import subprocess
 
     env = {
         **os.environ,

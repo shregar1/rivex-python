@@ -143,7 +143,7 @@ dev = [
 # `rivex.rivex_core`; the top-level `rivex_core.py` shim re-exposes it as the
 # `rivex_core` module so every existing `import rivex_core` call site keeps
 # working — all in ONE self-contained wheel, no separate `rivex-core` package.
-manifest-path = "../rivex-core/crates/rivex-python/Cargo.toml"
+manifest-path = "../core.rivex.vexarr.com/crates/rivex-python/Cargo.toml"
 module-name = "rivex.rivex_core"
 python-source = "src"
 features = ["pyo3/extension-module"]
