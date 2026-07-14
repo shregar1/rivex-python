@@ -29,24 +29,36 @@ app.run(host="0.0.0.0", port=8000)   # interactive docs at /docs
 
 ## Benchmarks
 
-Tested on Apple Silicon (10 cores, 32 GB) against 86M+ total requests using `wrk`, `vegeta`, and `hey`.
+Cross-language world-bench on Azure D4s_v5 (4 vCPU, 16 GB) against 12 frameworks using `wrk` 4.2.0.
 
-| Config | Peak RPS | RPS @ 10K concurrent | Avg Latency @ 10Kc |
+| Framework | Language | RPS (plaintext) | RPS (JSON) |
 | --- | --- | --- | --- |
-| Sync server (1 worker) | **72,445** | 40,060 | 248ms |
-| ASGI + uvicorn (4 workers) | **68,680** | 35,107 | 239ms |
-| ASGI + uvicorn (1 worker) | 19,477 | 8,344 | 236ms |
-| Middleware-heavy (7 layers) | 28,322 | 15,118 | 652ms |
+| **Rivex** | **Python** | **233,744** | **234,614** |
+| **Rivex (core)** | **Rust** | **232,837** | **235,809** |
+| libreactor | C | 336,607 | 331,253 |
+| h2o | C | 258,581 | 259,340 |
+| lwan | C | 262,286 | 259,092 |
+| ohkami | Rust | 261,254 | 254,745 |
+| drogon | C++ | 210,960 | 209,916 |
+| fasthttp | Go | 213,744 | 214,418 |
+| fiber | Go | 205,629 | 210,647 |
+| hyper | Rust | 233,844 | 236,424 |
+| axum | Rust | 210,534 | 213,871 |
+| warp | Rust | 228,801 | 229,339 |
+| salvo | Rust | 184,222 | 188,001 |
+| go-nethttp | Go | 126,596 | 125,964 |
+| actix-web | Rust | 119,262 | 123,192 |
 
-**Key results:**
+All results at 256 concurrent connections. p99 latency stays under 4ms for Rivex.
 
-- `GET /ping` via sync server: **72,445 req/s** at 100 concurrency, 1.41ms avg latency
-- `POST /items` with Pydantic V2 validation: **21,900 req/s** at 2,500 concurrency
-- Path params + query parsing: **26,749 req/s** at 2,500 concurrency
-- ASGI 4-worker at 100 concurrency: **68,680 req/s** — near-native throughput
-- 1B requests extrapolated: **~4 hours** at sustained peak (sync server)
+Global regions (Rivex Python, server-local: **235,808 RPS**, p99 3.38ms):
 
-Latency stays under 250ms even at 10,000 concurrent connections. Each middleware layer costs ~8-10% throughput.
+| Region | RPS | p99 |
+| --- | --- | --- |
+| Singapore | 5,952 | 174ms |
+| Sweden | 6,193 | 164ms |
+| India | 4,521 | 225ms |
+| UAE | 4,077 | 251ms |
 
 ## Installation
 
