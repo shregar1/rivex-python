@@ -3,7 +3,7 @@ requires = ["maturin>=1.0,<2.0"]
 build-backend = "maturin"
 
 [project]
-name = "rivex"
+name = "rivex-py"
 version = "0.2.3"
 description = "A Rust-powered Python web framework with FastAPI-like ergonomics"
 readme = "README.md"
