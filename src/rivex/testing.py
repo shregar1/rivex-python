@@ -290,7 +290,7 @@ class TestClient:
             instances = [cls(**kwargs) for cls, kwargs in self.app._middleware]
             hook_cls = self.app._build_hook_middleware()
             if hook_cls is not None:
-                instances.insert(0, hook_cls())
+                instances.insert(0, hook_cls()())
             self._mw_instances = instances
         return self._mw_instances
 
