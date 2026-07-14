@@ -1,7 +1,7 @@
 # Rivex Python SDK
 
-[![PyPI](https://img.shields.io/pypi/v/rivex)](https://pypi.org/project/rivex/)
-[![Python](https://img.shields.io/pypi/pyversions/rivex)](https://pypi.org/project/rivex/)
+[![PyPI](https://img.shields.io/pypi/v/rivex-py)](https://pypi.org/project/rivex-py/)
+[![Python](https://img.shields.io/pypi/pyversions/rivex-py)](https://pypi.org/project/rivex-py/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![CI](https://github.com/shregar1/rivex-python/actions/workflows/ci.yml/badge.svg)](https://github.com/shregar1/rivex-python/actions/workflows/ci.yml)
 
