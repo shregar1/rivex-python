@@ -233,7 +233,7 @@ hand-installed in a machine's global `site-packages` (macOS, darwin build).
 We traced this all the way down before writing it up, and it does **not**
 hold up as a real `rivex` issue:
 
-1. `core.rivex.vexarr.com` has exactly **one commit in its entire history**
+1. `rivex-core` has exactly **one commit in its entire history**
    (`7a41e5b`, "Initial commit") — the Rust multipart parser
    (`crates/rivex-http/src/multipart.rs`, `MultipartForm::parse`) has never
    changed. Reading it directly: it splits the whole body on the boundary
@@ -250,7 +250,7 @@ hold up as a real `rivex` issue:
 4. The only place the order-dependent 422 ever appeared was a macOS
    `rivex_core.cpython-313-darwin.so` in one machine's global `site-packages`
    — not the manylinux wheel actually vendored/deployed (which can't even run
-   on macOS), and with no corresponding commit in `core.rivex.vexarr.com`
+   on macOS), and with no corresponding commit in `rivex-core`
    that could explain different behavior from the single, unchanged Rust
    source.
 

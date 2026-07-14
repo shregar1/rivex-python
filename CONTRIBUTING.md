@@ -8,8 +8,7 @@ the Python SDK — the user-facing framework layer built on the Rust runtime.
 - **Python** 3.10+
 - **Rust** toolchain (the Rust core is compiled into the `rivex` wheel)
 - **maturin** (`pip install maturin`)
-- The sibling **core repo** checked out next to this one at
-  `../core.rivex.vexarr.com` (the wheel is built against it — see
+- The sibling **core repo** checked out as `../rivex-core` (the wheel is built against it — see
   `[tool.maturin] manifest-path` in `pyproject.toml`).
 
 ## Repository Layout
@@ -46,15 +45,15 @@ examples/
 
 ```bash
 # Clone the repository
-git clone https://github.com/rivex-dev/python.rivex.dev.git
-cd python.rivex.dev
+git clone https://github.com/shregar1/rivex-python.git
+cd rivex-python
 
 # Create a virtual environment
 python -m venv .venv
 source .venv/bin/activate
 
 # Build & install the rivex extension (compiles the Rust core from the sibling
-# ../core.rivex.vexarr.com into this package — no separate rivex-core install)
+# ../rivex-core into this package — no separate rivex-core install)
 maturin develop --release
 
 # Install the pure-Python dev dependencies

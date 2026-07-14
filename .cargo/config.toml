@@ -1,11 +1,11 @@
 # PyO3 extension-module linker flags — REQUIRED for `pip install`/`maturin build`
 # from this directory.
 #
-# The Rust crate lives in the sibling ``core.rivex.vexarr.com/`` workspace, which
+# The Rust crate lives in the sibling ``rivex-core/`` workspace, which
 # has its own ``.cargo/config.toml`` with these flags. But cargo discovers
 # ``.cargo/config.toml`` by walking up from its *current working directory*, not
 # from ``--manifest-path``. maturin runs cargo with CWD = this pyproject dir
-# (``python.rivex.vexarr.com``), a *sibling* of the core workspace — so the core
+# (``rivex-python``), a *sibling* of the core workspace — so the core
 # config is never found and the cdylib link fails with undefined ``_Py*`` symbols
 # (``ld: symbol(s) not found for architecture arm64``). Duplicating the flags here
 # makes ``pip install .`` / ``maturin build`` work without an external RUSTFLAGS.

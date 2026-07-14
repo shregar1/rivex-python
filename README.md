@@ -319,7 +319,7 @@ the `gen` JSON generator, OpenAPI, testing, observability (including the
 ## Project layout
 
 ```text
-python.rivex.vexarr.com/
+rivex-python/
 ├── rivex/                 # the SDK package (applications, routing, params,
 │                          #   responses, middleware, security, jwt, gen, …)
 ├── rivex_monitor/         # cross-language protocol monitoring dashboard
@@ -350,7 +350,7 @@ across languages.
 | Core runtime | `rivex-core` | Rust |
 | Python SDK | `rivex` | Python ≥ 3.10 |
 | TypeScript / JavaScript SDK | `rivex` | TypeScript / Node |
-| Go SDK | `github.com/rivex-dev/rivex-go` | Go |
+| Go SDK | `github.com/shregar1/rivex-go` | Go |
 | Ruby SDK | `rivex` | Ruby |
 | CLI | `rivex-cli` | Python |
 
@@ -362,4 +362,4 @@ PR. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the full workflow.
 
 ## License
 
-Released under the [MIT License](LICENSE). © 2025–2026 Rivex contributors.
+Released under the [MIT License](LICENSE). © 2025–2026 Shreyansh Singh, Shivansh Singh.

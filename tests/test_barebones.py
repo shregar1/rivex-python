@@ -169,7 +169,8 @@ def test_rivex_createsuperuser_works_in_barebones() -> None:
     ``RIVEX_ADMIN_DB`` env-var path and the printed-once token.
     """
     import os
-    import subprocess
+    import os
+import subprocess
 
     env = {
         **os.environ,
@@ -187,7 +188,7 @@ def test_rivex_createsuperuser_works_in_barebones() -> None:
         capture_output=True,
         text=True,
         timeout=10,
-        cwd="/Users/shreyansh/Documents/vexarr/rivex/python.rivex.vexarr.com",
+        cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
         env=env,
     )
     combined = result.stdout + result.stderr

@@ -24,8 +24,7 @@ jobs:
 
   # The `rivex` wheel bundles the Rust core (compiled by maturin from the sibling
   # core repo) — there is no separate `rivex-core` package. CI checks out both
-  # repos as siblings so the pyproject manifest-path (../core.rivex.vexarr.com)
-  # resolves.
+  # repos as siblings so the pyproject manifest-path resolves.
   test:
     name: Test (py${{ matrix.python }} / ${{ matrix.os }})
     runs-on: ${{ matrix.os }}
@@ -37,26 +36,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          path: python.rivex.vexarr.com
+          path: rivex-python
       - uses: actions/checkout@v4
         with:
-          repository: rivex-dev/core.rivex.vexarr.com
-          path: core.rivex.vexarr.com
+          repository: shregar1/rivex-core
+          path: rivex-core
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: core.rivex.vexarr.com
+          workspaces: rivex-core
       - name: Build & install rivex (bundled core) + dev deps
-        working-directory: python.rivex.vexarr.com
+        working-directory: rivex-python
         run: |
           pip install maturin
           maturin develop --release        # compiles rivex.rivex_core into the venv
           pip install -e ".[dev]"
       - name: Run tests
-        working-directory: python.rivex.vexarr.com
+        working-directory: rivex-python
         run: pytest tests/ -v --tb=short
 
   build-wheels:
@@ -74,22 +73,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          path: python.rivex.vexarr.com
+          path: rivex-python
       - uses: actions/checkout@v4
         with:
-          repository: rivex-dev/core.rivex.vexarr.com
-          path: core.rivex.vexarr.com
+          repository: shregar1/rivex-core
+          path: rivex-core
       - name: Build self-contained wheels
         uses: PyO3/maturin-action@v1
         with:
-          working-directory: python.rivex.vexarr.com
+          working-directory: rivex-python
           target: ${{ matrix.platform.target }}
           manylinux: ${{ matrix.platform.manylinux }}
           args: --release --strip --out dist --interpreter 3.10 3.11 3.12 3.13
       - uses: actions/upload-artifact@v4
         with:
           name: wheels-${{ matrix.platform.name }}
-          path: python.rivex.vexarr.com/dist/*.whl
+          path: rivex-python/dist/*.whl
 
   release:
     name: Release

@@ -181,7 +181,7 @@ async def send_email(
         subject=subject,
         body=body,
         html=html,
-        from_email=from_email or config.get("from_email", "noreply@rivex.dev"),
+        from_email=from_email or config.get("from_email", "sengarsinghshreyansh@gmail.com"),
         **kwargs,
     )
     return await backend.send(msg)

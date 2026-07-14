@@ -80,7 +80,7 @@ ulimit -n 65536
 
 ### Full Suite (automated)
 ```bash
-cd python.rivex.vexarr.com
+cd rivex-python
 bash bench/run_extreme.sh
 ```
 

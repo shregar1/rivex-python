@@ -1,6 +1,6 @@
 # rivex-scaffold
 
-A project scaffolding plugin for the [Rivex](https://github.com/vexarr/rivex) web framework.
+A project scaffolding plugin for the [Rivex](https://github.com/shregar1/rivex-python) web framework.
 
 ## Features
 

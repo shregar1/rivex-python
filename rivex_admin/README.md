@@ -1,6 +1,6 @@
 # rivex-admin
 
-A sleek, React-based admin dashboard plugin for the [Rivex](https://github.com/vexarr/rivex) web framework.
+A sleek, React-based admin dashboard plugin for the [Rivex](https://github.com/shregar1/rivex-python) web framework.
 
 ## Features
 

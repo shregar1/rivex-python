@@ -1,11 +1,11 @@
 # Rivex (Python SDK) — issues & suggested fixes
 
 Findings from building a full production API on Rivex + ORMX
-(`backend.shelf.vexarr.com`: ~220 routes, 830 tests). Each item is grounded in
-the current source under `python.rivex.vexarr.com/src/rivex/` with a concrete
+(~220 routes, 830 tests). Each item is grounded in
+the current source under `rivex-python/src/rivex/` with a concrete
 fix. Ordered by severity.
 
-Paths below are relative to `python.rivex.vexarr.com/src/rivex/`.
+Paths below are relative to `rivex-python/src/rivex/`.
 
 **Status:** #1, #2, and #3 are **fixed in this change** (patches + regression
 tests applied to the source below). #4 is effectively resolved by #1's fix.
@@ -225,5 +225,5 @@ two fixed) in `oss/ormx/ORMX_PYTHON_SDK_ISSUES.md`.** Summary:
 
 ---
 
-*Generated while building `backend.shelf.vexarr.com`. Line numbers are
+*Generated while building a production API. Line numbers are
 approximate — grep the referenced symbol names, which are stable.*

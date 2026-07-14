@@ -259,7 +259,8 @@ def test_createsuperuser_routes_to_admin_cli(tmp_path, monkeypatch, capsys):
     """Smoke-test that ``rivex createsuperuser`` is wired into the
     top-level CLI and reaches the admin store.  We use stdin to
     feed the interactive prompt."""
-    import subprocess
+    import os
+import subprocess
 
     # Provide username + an empty token (auto-generate) via stdin.
     result = subprocess.run(
@@ -274,7 +275,7 @@ def test_createsuperuser_routes_to_admin_cli(tmp_path, monkeypatch, capsys):
         capture_output=True,
         text=True,
         timeout=10,
-        cwd="/Users/shreyansh/Documents/vexarr/rivex/python.rivex.vexarr.com",
+        cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
         env={
             **__import__("os").environ,
             "RIVEX_ADMIN_DB": str(tmp_path / "admin.db"),

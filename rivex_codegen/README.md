@@ -1,6 +1,6 @@
 # rivex-codegen
 
-A resource code generator plugin for the [Rivex](https://github.com/vexarr/rivex) web framework.
+A resource code generator plugin for the [Rivex](https://github.com/shregar1/rivex-python) web framework.
 
 ## Features
 

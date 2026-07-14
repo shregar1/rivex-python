@@ -18,7 +18,7 @@ release, then is no longer supported.
 ## Reporting a vulnerability
 
 **Please do not file a public issue.** Instead, report privately by email to
-**security@rivex.dev** (PGP key on request). Include:
+**sengarsinghshreyansh@gmail.com**. Include:
 
 - A clear description of the issue and the impact you observed.
 - Steps to reproduce — preferably a minimal `app.py` that triggers the bug.

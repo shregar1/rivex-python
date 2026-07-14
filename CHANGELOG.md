@@ -369,7 +369,7 @@ sync for tail-latency-sensitive APIs.
   and ``rivex_codegen/templates`` from mypy.
 - **New ``LICENSE`` and ``SECURITY.md``** — MIT license text
   and a coordinated-disclosure policy with
-  ``security@rivex.dev``.
+   ``sengarsinghshreyansh@gmail.com``.
 
 ## [0.1.0] - 2025-05-10
 
@@ -386,5 +386,5 @@ sync for tail-latency-sensitive APIs.
 - HTTP status code constants via `status` module
 - Lifecycle hooks (`startup`/`shutdown`) and custom exception handlers
 
-[0.2.0]: https://github.com/rivex-dev/python.rivex.dev/compare/v0.1.0...v0.2.0
-[0.1.0]: https://github.com/rivex-dev/python.rivex.dev/releases/tag/v0.1.0
+[0.2.0]: https://github.com/shregar1/rivex-python/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/shregar1/rivex-python/releases/tag/v0.1.0

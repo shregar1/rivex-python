@@ -24,7 +24,7 @@ class PasswordReset:
         secret_key: str,
         token_expiry: int = 3600,
         email_backend: Any = None,
-        from_email: str = "noreply@rivex.dev",
+        from_email: str = "sengarsinghshreyansh@gmail.com",
     ):
         self._secret_key = secret_key
         self._token_expiry = token_expiry

@@ -1,6 +1,6 @@
 # rivex-react
 
-A React-based API documentation renderer plugin for the [Rivex](https://github.com/vexarr/rivex) web framework.
+A React-based API documentation renderer plugin for the [Rivex](https://github.com/shregar1/rivex-python) web framework.
 
 ## Features
 
