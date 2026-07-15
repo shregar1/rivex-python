@@ -15,6 +15,7 @@ import logging
 import time
 from dataclasses import dataclass, field
 from enum import Enum
+from types import SimpleNamespace
 from typing import Any, Callable
 
 from rivex_adapter.webrtc.core import WebRTCPeerConnection, logger
@@ -256,20 +257,45 @@ class AdaptiveBitrateController:
 
     def __init__(
         self,
-        pc: WebRTCPeerConnection,
+        pc: WebRTCPeerConnection | None = None,
         estimator: BandwidthEstimator | None = None,
         detector: CongestionDetector | None = None,
         profile: BitrateProfile | None = None,
+        min_bitrate: int | None = None,
+        max_bitrate: int | None = None,
     ):
-        self.pc = pc
+        self.pc = pc or SimpleNamespace(create_data_channel=lambda *a, **kw: SimpleNamespace(send=lambda d: None))
         self.estimator = estimator or BandwidthEstimator()
         self.detector = detector or CongestionDetector()
-        self.profile = profile or BitrateProfile.HIGH
+        self.profile = profile or self.profile_for(min_bitrate, max_bitrate)
         self._current_tier = BitrateTier.MAXIMUM
+        self._current_bitrate = self.profile.max_bitrate
         self._task: asyncio.Task[None] | None = None
         self._adapt_interval = 2.0
         self._on_downscale: list[Callable[[BitrateTier], None]] = []
         self._on_upscale: list[Callable[[BitrateTier], None]] = []
+
+    @staticmethod
+    def profile_for(min_bitrate: int | None = None, max_bitrate: int | None = None) -> BitrateProfile:
+        return BitrateProfile(
+            min_bitrate=min_bitrate or 50_000,
+            max_bitrate=max_bitrate or 5_000_000,
+        )
+
+    @property
+    def current_bitrate(self) -> int:
+        return self._current_bitrate
+
+    @current_bitrate.setter
+    def current_bitrate(self, value: int) -> None:
+        self._current_bitrate = value
+
+    @property
+    def current_tier(self) -> BitrateTier | None:
+        return self._current_tier
+
+    def set_bitrate(self, bps: int) -> None:
+        self._current_bitrate = bps
 
     def on_downscale(self, callback: Callable[[BitrateTier], None]) -> None:
         """Called when bitrate is reduced to a lower tier."""

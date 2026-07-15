@@ -931,9 +931,9 @@ class TestBandwidth:
     def test_bitrate_profile(self):
         from rivex_adapter.webrtc.bandwidth import BitrateProfile
         bp = BitrateProfile()
-        assert hasattr(bp, "low")
-        assert hasattr(bp, "medium")
-        assert hasattr(bp, "high")
+        assert hasattr(bp, "LOW")
+        assert hasattr(bp, "MEDIUM")
+        assert hasattr(bp, "HIGH")
 
 
 # =========================================================================
