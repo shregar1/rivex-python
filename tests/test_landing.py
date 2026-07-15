@@ -21,7 +21,7 @@ def _load_landing():
     name = "rivex_landing_under_test"
     spec = importlib.util.spec_from_file_location(
         name,
-        Path(__file__).resolve().parents[1] / "src" / "rivex" / "_landing.py",
+        Path(__file__).resolve().parents[1] / "src" / "rivex" / "web" / "_landing.py",
     )
     mod = importlib.util.module_from_spec(spec)
     sys.modules[name] = mod

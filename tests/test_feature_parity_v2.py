@@ -7,9 +7,9 @@ import pytest
 
 from rivex import Rivex, TestClient
 from rivex.events import Signal
-from rivex.guards import AllowAll, DenyAll, GuardMiddleware, IsAuthenticated, RequiresRoles
-from rivex.health import HealthCheck
-from rivex.middleware import (
+from rivex.auth.guards import AllowAll, DenyAll, GuardMiddleware, IsAuthenticated, RequiresRoles
+from rivex.observability.health import HealthCheck
+from rivex.middleware.middleware import (
     CompressionMiddleware,
     IdempotencyMiddleware,
     IPFilterMiddleware,
@@ -21,10 +21,10 @@ from rivex.problem import (
     ProblemResponse,
     problem_exception_handler,
 )
-from rivex.structlog import JSONFormatter, StructuredLogger
-from rivex.throttling import AnonRateThrottle, ThrottleMiddleware, UserRateThrottle
-from rivex.tracing import Span, TracingMiddleware
-from rivex.versioning import (
+from rivex.observability.structlog import JSONFormatter, StructuredLogger
+from rivex.middleware.throttling import AnonRateThrottle, ThrottleMiddleware, UserRateThrottle
+from rivex.observability.tracing import Span, TracingMiddleware
+from rivex.data.versioning import (
     AcceptHeaderVersioning,
     HeaderVersioning,
     QueryParamVersioning,
@@ -332,7 +332,7 @@ def test_allow_all_guard():
 
 
 def test_deny_all_guard():
-    from rivex.exceptions import HTTPException
+    from rivex.core.exceptions import HTTPException
 
     g = DenyAll()
     with pytest.raises(HTTPException):
@@ -664,7 +664,7 @@ def test_typed_path_uuid():
 
 def test_scoped_middleware():
     from rivex import Router
-    from rivex.middleware import SecurityHeadersMiddleware
+    from rivex.middleware.middleware import SecurityHeadersMiddleware
 
     app = Rivex()
     router = Router(prefix="/api")
@@ -695,8 +695,8 @@ def test_scoped_middleware():
 
 def test_scoped_exception_handler():
     from rivex import Router
-    from rivex.exceptions import HTTPException
-    from rivex.responses import JSONResponse
+    from rivex.core.exceptions import HTTPException
+    from rivex.core.responses import JSONResponse
 
     app = Rivex()
     router = Router(prefix="/api")
@@ -720,7 +720,7 @@ def test_scoped_exception_handler():
 
 
 def test_redirect_default_307():
-    from rivex.responses import RedirectResponse
+    from rivex.core.responses import RedirectResponse
 
     r = RedirectResponse("/new")
     raw = r._to_raw()
@@ -728,7 +728,7 @@ def test_redirect_default_307():
 
 
 def test_redirect_301():
-    from rivex.responses import RedirectResponse
+    from rivex.core.responses import RedirectResponse
 
     r = RedirectResponse("/new", status_code=301)
     raw = r._to_raw()
@@ -736,7 +736,7 @@ def test_redirect_301():
 
 
 def test_redirect_302():
-    from rivex.responses import RedirectResponse
+    from rivex.core.responses import RedirectResponse
 
     r = RedirectResponse("/new", status_code=302)
     raw = r._to_raw()

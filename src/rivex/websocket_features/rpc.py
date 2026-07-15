@@ -6,7 +6,7 @@ import uuid
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from rivex.exceptions import WebSocketDisconnect
+from rivex.core.exceptions import WebSocketDisconnect
 
 
 class RPCServer:

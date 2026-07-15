@@ -3,10 +3,10 @@
 import pytest
 
 from rivex import Rivex, TestClient
-from rivex.dependencies import Depends
-from rivex.middleware import MethodOverrideMiddleware
-from rivex.requests import Request
-from rivex.responses import XMLResponse
+from rivex.core.dependencies import Depends
+from rivex.middleware.middleware import MethodOverrideMiddleware
+from rivex.core.requests import Request
+from rivex.core.responses import XMLResponse
 
 # ── 1. Yield Dependencies ──
 
@@ -114,7 +114,7 @@ def test_request_client():
 def test_custom_serializer():
     import json as _json
 
-    from rivex.serialization import deserialize, serialize, set_serializer
+    from rivex.serialization.serialization import deserialize, serialize, set_serializer
 
     calls = []
 
@@ -134,7 +134,7 @@ def test_custom_serializer():
 
 
 def test_custom_serializer_with_response():
-    from rivex.responses import JSONResponse
+    from rivex.core.responses import JSONResponse
 
     resp = JSONResponse({"msg": "hi"})
     raw = resp._to_raw()
@@ -148,7 +148,7 @@ def test_custom_serializer_with_response():
 def test_openapi_multiple_responses():
     from pydantic import BaseModel
 
-    from rivex.openapi import generate_openapi
+    from rivex.openapi.openapi import generate_openapi
 
     app = Rivex()
 
@@ -250,7 +250,7 @@ def test_route_group_context_manager():
 
 
 def test_otel_exporter_no_crash():
-    from rivex.tracing import OTelSpanExporter, Span
+    from rivex.observability.tracing import OTelSpanExporter, Span
 
     exporter = OTelSpanExporter()
     span = Span(name="test", trace_id="abc", span_id="def")
@@ -260,7 +260,7 @@ def test_otel_exporter_no_crash():
 
 
 def test_configure_tracing():
-    from rivex.tracing import configure_tracing
+    from rivex.observability.tracing import configure_tracing
 
     mw = configure_tracing(service_name="test-app")
     assert mw is not None
@@ -270,7 +270,7 @@ def test_configure_tracing():
 
 
 def test_counter():
-    from rivex.metrics import Counter
+    from rivex.observability.metrics import Counter
 
     c = Counter("test_total", "Test counter")
     c.inc()
@@ -280,7 +280,7 @@ def test_counter():
 
 
 def test_counter_with_labels():
-    from rivex.metrics import Counter
+    from rivex.observability.metrics import Counter
 
     c = Counter("http_total", "HTTP requests", labels=["method", "status"])
     c.inc(method="GET", status="200")
@@ -292,7 +292,7 @@ def test_counter_with_labels():
 
 
 def test_gauge():
-    from rivex.metrics import Gauge
+    from rivex.observability.metrics import Gauge
 
     g = Gauge("active_connections", "Active conns")
     g.set(5)
@@ -303,7 +303,7 @@ def test_gauge():
 
 
 def test_histogram():
-    from rivex.metrics import Histogram
+    from rivex.observability.metrics import Histogram
 
     h = Histogram("request_duration", "Duration", buckets=[0.1, 0.5, 1.0])
     h.observe(0.05)
@@ -316,7 +316,7 @@ def test_histogram():
 
 
 def test_histogram_time_context():
-    from rivex.metrics import Histogram
+    from rivex.observability.metrics import Histogram
 
     h = Histogram("op_seconds", "Operation time")
     with h.time():
@@ -326,7 +326,7 @@ def test_histogram_time_context():
 
 
 def test_metrics_registry():
-    from rivex.metrics import MetricsRegistry
+    from rivex.observability.metrics import MetricsRegistry
 
     reg = MetricsRegistry()
     c = reg.counter("my_counter", "A counter")
@@ -339,7 +339,7 @@ def test_metrics_registry():
 
 
 def test_metrics_middleware():
-    from rivex.metrics import MetricsMiddleware, MetricsRegistry
+    from rivex.observability.metrics import MetricsMiddleware, MetricsRegistry
 
     reg = MetricsRegistry()
     app = Rivex()
@@ -357,7 +357,7 @@ def test_metrics_middleware():
 
 
 def test_metrics_register_routes():
-    from rivex.metrics import MetricsRegistry
+    from rivex.observability.metrics import MetricsRegistry
 
     app = Rivex()
     reg = MetricsRegistry()
@@ -374,7 +374,7 @@ def test_metrics_register_routes():
 
 
 def test_jwt_encode_decode():
-    from rivex.jwt import decode, encode
+    from rivex.auth.jwt import decode, encode
 
     token = encode({"sub": "user123", "role": "admin"}, "secret")
     payload = decode(token, "secret")
@@ -383,7 +383,7 @@ def test_jwt_encode_decode():
 
 
 def test_jwt_expiration():
-    from rivex.jwt import ExpiredTokenError, decode, encode
+    from rivex.auth.jwt import ExpiredTokenError, decode, encode
 
     token = encode({"sub": "user"}, "secret", expires_in=-1)
     with pytest.raises(ExpiredTokenError):
@@ -391,7 +391,7 @@ def test_jwt_expiration():
 
 
 def test_jwt_invalid_signature():
-    from rivex.jwt import InvalidTokenError, decode, encode
+    from rivex.auth.jwt import InvalidTokenError, decode, encode
 
     token = encode({"sub": "user"}, "secret1")
     with pytest.raises(InvalidTokenError):
@@ -399,14 +399,14 @@ def test_jwt_invalid_signature():
 
 
 def test_jwt_invalid_token_format():
-    from rivex.jwt import InvalidTokenError, decode
+    from rivex.auth.jwt import InvalidTokenError, decode
 
     with pytest.raises((InvalidTokenError, ValueError, RuntimeError)):
         decode("not.a.valid.token.at.all", "secret")
 
 
 def test_jwt_bearer_dependency():
-    from rivex.jwt import JWTBearer, encode
+    from rivex.auth.jwt import JWTBearer, encode
 
     app = Rivex()
     jwt_auth = JWTBearer(secret="mysecret")
@@ -423,7 +423,7 @@ def test_jwt_bearer_dependency():
 
 
 def test_jwt_bearer_no_token():
-    from rivex.jwt import JWTBearer
+    from rivex.auth.jwt import JWTBearer
 
     app = Rivex()
 
@@ -440,7 +440,7 @@ def test_jwt_bearer_no_token():
 
 
 def test_router_before_request():
-    from rivex.routing import Router
+    from rivex.core.routing import Router
 
     app = Rivex()
     router = Router(prefix="/api")
@@ -462,7 +462,7 @@ def test_router_before_request():
 
 
 def test_router_after_request():
-    from rivex.routing import Router
+    from rivex.core.routing import Router
 
     app = Rivex()
     router = Router(prefix="/api")
@@ -490,7 +490,7 @@ def test_router_after_request():
 
 
 def test_plugin_register():
-    from rivex.plugins import Plugin
+    from rivex.cli.plugins import Plugin
 
     class MyPlugin(Plugin):
         name = "my_plugin"
@@ -507,7 +507,7 @@ def test_plugin_register():
 
 
 def test_plugin_adds_routes():
-    from rivex.plugins import Plugin
+    from rivex.cli.plugins import Plugin
 
     class HealthPlugin(Plugin):
         name = "health"
@@ -730,7 +730,7 @@ def test_webhook_github():
     import hashlib
     import hmac
 
-    from rivex.webhooks import verify_signature
+    from rivex.protocols.webhooks import verify_signature
 
     secret = "webhook-secret"
     payload = b'{"action":"push"}'
@@ -740,7 +740,7 @@ def test_webhook_github():
 
 
 def test_webhook_github_invalid():
-    from rivex.webhooks import WebhookVerificationError, verify_signature
+    from rivex.protocols.webhooks import WebhookVerificationError, verify_signature
 
     with pytest.raises(WebhookVerificationError):
         verify_signature(b"payload", "sha256=invalid", "secret", provider="github")
@@ -750,7 +750,7 @@ def test_webhook_generic():
     import hashlib
     import hmac
 
-    from rivex.webhooks import verify_signature
+    from rivex.protocols.webhooks import verify_signature
 
     secret = "test"
     payload = b"hello"
@@ -763,7 +763,7 @@ def test_webhook_guard_dependency():
     import hashlib
     import hmac
 
-    from rivex.webhooks import WebhookGuard
+    from rivex.protocols.webhooks import WebhookGuard
 
     app = Rivex()
     secret = "whsec_test"
@@ -791,7 +791,7 @@ def test_webhook_guard_dependency():
 def test_form_model_urlencoded():
     from pydantic import BaseModel
 
-    from rivex.uploads import Form
+    from rivex.web.uploads import Form
 
     app = Rivex()
 
@@ -816,7 +816,7 @@ def test_form_model_urlencoded():
 def test_form_model_validation_error():
     from pydantic import BaseModel
 
-    from rivex.uploads import Form
+    from rivex.web.uploads import Form
 
     app = Rivex()
 
@@ -840,7 +840,7 @@ def test_form_model_validation_error():
 def test_form_model_optional():
     from pydantic import BaseModel
 
-    from rivex.uploads import Form
+    from rivex.web.uploads import Form
 
     app = Rivex()
 
@@ -866,7 +866,7 @@ def test_form_model_optional():
 def test_form_model_missing_required():
     from pydantic import BaseModel
 
-    from rivex.uploads import Form
+    from rivex.web.uploads import Form
 
     app = Rivex()
 
@@ -890,7 +890,7 @@ def test_form_model_missing_required():
 def test_form_model_not_required_default():
     from pydantic import BaseModel
 
-    from rivex.uploads import Form
+    from rivex.web.uploads import Form
 
     app = Rivex()
 

@@ -8,7 +8,7 @@ pure-Python in-memory store for development / testing.
 Usage in your app::
 
     from rivex_monitor import register_monitor_partials, MonitorMiddleware
-    from rivex.middleware import Middleware
+    from rivex.middleware.middleware import Middleware
 
     app.add_middleware(MonitorMiddleware)
     register_monitor_partials(app)
@@ -121,7 +121,7 @@ class MonitoredConnectionManager:
 
     Usage::
 
-        from rivex.ws import ConnectionManager
+        from rivex.protocols.ws import ConnectionManager
         from rivex_monitor import MonitoredConnectionManager
 
         app._ws_manager = MonitoredConnectionManager(ConnectionManager(), app)

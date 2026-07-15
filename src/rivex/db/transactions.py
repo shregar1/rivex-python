@@ -127,7 +127,7 @@ class atomic:
     async def __aenter__(self) -> Transaction:
         pool = self._pool
         if pool is None:
-            from rivex.applications import Rivex
+            from rivex.core.applications import Rivex
             app = Rivex.get_current()
             pool = app.db
         self._transaction = Transaction(pool, savepoint=self._savepoint)

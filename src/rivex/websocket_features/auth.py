@@ -4,7 +4,7 @@ import json
 from collections.abc import Callable
 from typing import Any
 
-from rivex.exceptions import WebSocketDisconnect
+from rivex.core.exceptions import WebSocketDisconnect
 
 
 class WSAuthMiddleware:

@@ -35,9 +35,9 @@ import pytest
 
 # conftest.py stubs ``rivex_core`` so the package imports cleanly even
 # without the compiled Rust extension.
-from rivex._injection import build_handler_wrapper  # noqa: E402
-from rivex.params import Body, Cookie, Header, Path, Query  # noqa: E402
-from rivex.uploads import File, Form, MultipartBody, UploadFile  # noqa: E402
+from rivex.core._injection import build_handler_wrapper  # noqa: E402
+from rivex.core.params import Body, Cookie, Header, Path, Query  # noqa: E402
+from rivex.web.uploads import File, Form, MultipartBody, UploadFile  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Per-backend test models (module-level so type-hint resolution finds them)
@@ -443,7 +443,7 @@ async def test_form_with_multipart_pydantic_model():
 
 @pytest.mark.asyncio
 async def test_form_scalar_int():
-    from rivex.uploads import Form
+    from rivex.web.uploads import Form
 
     async def handler(qty: int = Form()):
         return {"qty": qty * 2}
@@ -463,7 +463,7 @@ async def test_form_scalar_int():
 
 @pytest.mark.asyncio
 async def test_form_scalar_bool():
-    from rivex.uploads import Form
+    from rivex.web.uploads import Form
 
     async def handler(flag: bool = Form()):
         return {"flag": flag}
@@ -645,7 +645,7 @@ def test_bodies_classify_all_three_backends():
     pytest.importorskip("schemax", reason="schemax not installed")
     pytest.importorskip("marshmallow", reason="marshmallow not installed")
 
-    from rivex._bodies import body_schema
+    from rivex.core._bodies import body_schema
 
     assert body_schema(PydItem) == "pydantic"
     assert body_schema(SchemaxItem) == "schemax"

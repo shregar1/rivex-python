@@ -180,7 +180,7 @@ def test_rivex_createsuperuser_works_in_barebones() -> None:
             sys.executable,
             "-c",
             "import sys; sys.path.insert(0, '.'); "
-            "from rivex.cli import main; sys.argv = ['rivex', 'createsuperuser']; "
+            "from rivex.cli.cli import main; sys.argv = ['rivex', 'createsuperuser']; "
             "main()",
         ],
         input="autotest\n\n\n",  # username, then blank token, then confirm

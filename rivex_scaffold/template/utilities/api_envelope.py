@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from rivex.exceptions import HTTPException
+from rivex.core.exceptions import HTTPException
 
 from dtos.response.abstraction import ApiEnvelopeResponse, envelope_http_response
 

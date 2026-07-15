@@ -45,7 +45,7 @@ import os
 from pathlib import Path
 from typing import Any, ClassVar
 
-from rivex.schema import Schema
+from rivex.serialization.schema import Schema
 
 
 def _parse_env_file(path: str | os.PathLike[str]) -> dict[str, str]:

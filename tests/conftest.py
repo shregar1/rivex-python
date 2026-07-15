@@ -52,7 +52,7 @@ def _restore_rivex_module_identity():
     # when the suite runs as a whole.  Resetting both lists around
     # every test keeps the registries empty unless a test
     # intentionally fills them.
-    from rivex import _bodies as _rb
+    from rivex.core import _bodies as _rb
 
     saved_handlers = dict(_rb._CUSTOM_HANDLERS)
     saved_detectors = list(_rb._CUSTOM_DETECTORS)

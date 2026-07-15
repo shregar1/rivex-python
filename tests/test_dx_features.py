@@ -170,7 +170,7 @@ def test_reload_snapshot_picks_up_py_files() -> None:
     indefinitely, so we don't run that here — we just verify the
     file-discovery helper does what the watcher relies on.
     """
-    from rivex.reload import _snapshot
+    from rivex.cli.reload import _snapshot
 
     with tempfile.TemporaryDirectory() as d:
         root = Path(d)

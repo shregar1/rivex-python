@@ -27,8 +27,8 @@ from rivex import (
     Router,
     status,
 )
-from rivex._injection import _coerce, _normalize_response, build_handler_wrapper
-from rivex.openapi import generate_openapi
+from rivex.core._injection import _coerce, _normalize_response, build_handler_wrapper
+from rivex.openapi.openapi import generate_openapi
 
 
 def _json_body(result):

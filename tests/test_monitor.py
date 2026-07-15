@@ -502,7 +502,7 @@ class TestMonitoredConnectionManager:
 class TestSyncFromPrometheus:
     def test_seeds_from_metrics_middleware(self, ctx):
         """Simulate MetricsMiddleware counters on the app."""
-        from rivex.metrics import Counter, Histogram
+        from rivex.observability.metrics import Counter, Histogram
 
         # When the Rust backend is active, Counter/Histogram store data in
         # Rust memory (not in Python _values dicts), so _sync_from_prometheus
@@ -617,14 +617,14 @@ class TestRegisterMonitorPartials:
         assert app._monitor_started_at > 0
 
     def test_wraps_existing_ws_manager(self, app):
-        from rivex.ws import ConnectionManager
+        from rivex.protocols.ws import ConnectionManager
 
         app._ws_manager = ConnectionManager()
         register_monitor_partials(app)
         assert isinstance(app._ws_manager, MonitoredConnectionManager)
 
     def test_does_not_double_wrap(self, app):
-        from rivex.ws import ConnectionManager
+        from rivex.protocols.ws import ConnectionManager
 
         app._ws_manager = ConnectionManager()
         register_monitor_partials(app)

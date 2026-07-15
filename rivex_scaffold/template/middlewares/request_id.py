@@ -5,8 +5,8 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from rivex._compat import RC_V2, get_request_header
-from rivex.middleware import Middleware
+from rivex.core._compat import RC_V2, get_request_header
+from rivex.middleware.middleware import Middleware
 
 from configs import PROJECT_NAME, PROJECT_VERSION
 

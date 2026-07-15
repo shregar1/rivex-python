@@ -16,8 +16,8 @@ from typing import Any
 import pytest
 
 import rivex
-from rivex.responses import EventSourceResponse
-from rivex.sse import SseEvent
+from rivex.core.responses import EventSourceResponse
+from rivex.protocols.sse import SseEvent
 
 
 def _free_port() -> int:

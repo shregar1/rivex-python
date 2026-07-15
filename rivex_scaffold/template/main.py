@@ -11,7 +11,7 @@ from ormx import connect, disconnect
 import models  # noqa: F401 — register ORMX model registry
 from errors import DomainError
 from dtos.response import ApiEnvelopeResponse
-from rivex._compat import get_request_header
+from rivex.core._compat import get_request_header
 from configs import (
     MEDIA_DIR,
     MEDIA_URL_PREFIX,

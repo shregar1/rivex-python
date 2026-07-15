@@ -9,20 +9,20 @@ from uuid import UUID
 import pytest
 
 from rivex import Rivex, TestClient
-from rivex.caching import CacheMiddleware, ETagMiddleware
-from rivex.csrf import CSRFMiddleware
-from rivex.encoders import jsonable_encoder
-from rivex.middleware import (
+from rivex.data.caching import CacheMiddleware, ETagMiddleware
+from rivex.middleware.csrf import CSRFMiddleware
+from rivex.serialization.encoders import jsonable_encoder
+from rivex.middleware.middleware import (
     AccessLogMiddleware,
     MaxBodySizeMiddleware,
     RateLimitMiddleware,
     SecurityHeadersMiddleware,
     TrailingSlashMiddleware,
 )
-from rivex.negotiation import best_match, parse_accept
-from rivex.pagination import CursorPage, paginate
-from rivex.responses import EventSourceResponse
-from rivex.ws import ConnectionManager
+from rivex.web.negotiation import best_match, parse_accept
+from rivex.data.pagination import CursorPage, paginate
+from rivex.core.responses import EventSourceResponse
+from rivex.protocols.ws import ConnectionManager
 
 # ── SSE ──
 
@@ -284,7 +284,7 @@ def test_fallback_handler():
         return {"ok": True}
 
     async def custom_404(request):
-        from rivex.responses import JSONResponse
+        from rivex.core.responses import JSONResponse
 
         return JSONResponse({"error": "not found", "path": request.path}, status_code=404)
 
@@ -475,7 +475,7 @@ def test_cli_version():
     import io
     import sys
 
-    from rivex.cli import main
+    from rivex.cli.cli import main
 
     old_stdout = sys.stdout
     sys.stdout = io.StringIO()
@@ -488,7 +488,7 @@ def test_cli_version():
 
 
 def test_cli_routes_bad_path():
-    from rivex.cli import main
+    from rivex.cli.cli import main
 
     with pytest.raises(SystemExit) as exc_info:
         main(["routes", "nocolon"])

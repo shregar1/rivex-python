@@ -6,15 +6,15 @@ from dataclasses import dataclass
 
 import pytest
 
-from rivex.auth import (
+from rivex.auth.auth import (
     admin_only,
     authenticated,
     current_user,
     set_user_resolver,
 )
-from rivex.context import RequestContextMiddleware, current_user_id, request_context
-from rivex.exceptions import HTTPException
-from rivex.requests import Request
+from rivex.core.context import RequestContextMiddleware, current_user_id, request_context
+from rivex.core.exceptions import HTTPException
+from rivex.core.requests import Request
 
 
 @dataclass
@@ -81,7 +81,7 @@ async def test_authenticated_via_middleware_e2e():
     """End-to-end: with the context middleware installed, an
     unauthenticated request to a decorated handler comes back as 401
     without the handler running."""
-    from rivex._injection import build_handler_wrapper
+    from rivex.core._injection import build_handler_wrapper
 
     async def resolver(req: Request) -> _User | None:
         return None

@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 from rivex import Rivex
-from rivex.requests import Request
-from rivex.responses import HTMLResponse
+from rivex.core.requests import Request
+from rivex.core.responses import HTMLResponse
 
 
 def test_jinja2_templates_render():
-    from rivex.templating import Jinja2Templates
+    from rivex.web.templating import Jinja2Templates
 
     templates = Jinja2Templates("tests/templates")
     resp = templates.render("page.html", title="Hello World")
@@ -22,7 +22,7 @@ def test_app_template_method():
     async def handler():
         return app.template("page.html", {"title": "From App"})
 
-    from rivex.testing import TestClient
+    from rivex.testing.testing import TestClient
 
     client = TestClient(app)
     resp = client.get("/page")
@@ -75,7 +75,7 @@ def test_app_template_on_route_with_htmx():
             return app.template("page.html", {"title": "Partial"})
         return app.template("page.html", {"title": "Full"})
 
-    from rivex.testing import TestClient
+    from rivex.testing.testing import TestClient
 
     client = TestClient(app)
     resp = client.get("/mixed")

@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from rivex import Rivex
-from rivex.testing import TestClient
+from rivex.testing.testing import TestClient
 
 
 def test_mount_sub_app_routes():

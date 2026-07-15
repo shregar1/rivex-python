@@ -178,7 +178,7 @@ def test_cli_print_token_once(capsys) -> None:
 
 def test_build_health_html() -> None:
     """build_health_html renders the operational status page (now in build_server_html)."""
-    from rivex.openapi import _fallback_health_html
+    from rivex.openapi.openapi import _fallback_health_html
 
     html = _fallback_health_html("Test", "1.0", "/docs")
     assert "Test" in html
@@ -187,7 +187,7 @@ def test_build_health_html() -> None:
 
 def test_build_health_html_no_docs() -> None:
     """build_health_html without docs_url."""
-    from rivex.openapi import _fallback_health_html
+    from rivex.openapi.openapi import _fallback_health_html
 
     html = _fallback_health_html("Test", "1.0", None)
     assert "Test" in html
@@ -195,7 +195,7 @@ def test_build_health_html_no_docs() -> None:
 
 def test_fallback_redoc_html() -> None:
     """_fallback_redoc_html renders ReDoc page."""
-    from rivex.openapi import _fallback_redoc_html
+    from rivex.openapi.openapi import _fallback_redoc_html
 
     html = _fallback_redoc_html("X", "/openapi.json")
     assert "X" in html
@@ -204,7 +204,7 @@ def test_fallback_redoc_html() -> None:
 
 def test_openapi_module_has_all_builders() -> None:
     """All public build functions are exported."""
-    import rivex.openapi as oa
+    import rivex.openapi.openapi as oa
 
     assert hasattr(oa, "build_docs_html")
     assert hasattr(oa, "build_redoc_html")
@@ -222,7 +222,7 @@ def test_openapi_module_has_all_builders() -> None:
 
 def test_brand_mark_with_none() -> None:
     """_brand_mark handles None as 'Rivex'."""
-    from rivex.openapi import _brand_mark
+    from rivex.openapi.openapi import _brand_mark
 
     result = _brand_mark(None, accent=True)
     # Default is "Rivex" uppercased with X in accent span
@@ -232,7 +232,7 @@ def test_brand_mark_with_none() -> None:
 
 def test_powered_by_rivex_html_structure() -> None:
     """_powered_by_rivex returns a div with label and x spans."""
-    from rivex.openapi import _powered_by_rivex
+    from rivex.openapi.openapi import _powered_by_rivex
 
     html = _powered_by_rivex()
     assert html.startswith("<div")
@@ -244,7 +244,7 @@ def test_powered_by_rivex_html_structure() -> None:
 
 def test_build_server_html_no_docs_no_admin() -> None:
     """build_server_html with no docs and no admin."""
-    from rivex.openapi import build_server_html
+    from rivex.openapi.openapi import build_server_html
 
     html = build_server_html(
         title="X",
@@ -320,7 +320,7 @@ def test_rivex_app_name_default() -> None:
 
 def test_body_schemas_constants() -> None:
     """The SCHEMAS tuple has all expected backends."""
-    from rivex._bodies import SCHEMAS
+    from rivex.core._bodies import SCHEMAS
 
     assert "pydantic" in SCHEMAS
     assert "schemax" in SCHEMAS
@@ -333,7 +333,7 @@ def test_body_schemas_constants() -> None:
 
 def test_register_body_schema() -> None:
     """register_body_schema adds custom schemas to the registry."""
-    from rivex._bodies import body_schema_extended, register_body_schema
+    from rivex.core._bodies import body_schema_extended, register_body_schema
 
     class MyCustom:
         pass
@@ -352,7 +352,7 @@ def test_register_body_schema_rejects_builtin() -> None:
     """register_body_schema refuses to shadow built-in backends."""
     import pytest
 
-    from rivex._bodies import BodySchema, register_body_schema
+    from rivex.core._bodies import BodySchema, register_body_schema
 
     with pytest.raises(ValueError):
         register_body_schema(
@@ -364,7 +364,7 @@ def test_register_body_schema_rejects_builtin() -> None:
 
 def test_body_schema_returns_unknown() -> None:
     """body_schema returns 'unknown' for unrecognized types."""
-    from rivex._bodies import BodySchema, body_schema
+    from rivex.core._bodies import BodySchema, body_schema
 
     assert body_schema(object) == BodySchema.UNKNOWN
     assert body_schema(type(None)) == BodySchema.UNKNOWN
@@ -372,7 +372,7 @@ def test_body_schema_returns_unknown() -> None:
 
 def test_coerce_body_dict_passthrough() -> None:
     """coerce_body passes dicts through without coercion."""
-    from rivex._bodies import coerce_body
+    from rivex.core._bodies import coerce_body
 
     data = {"x": 1, "y": "hello"}
     result = coerce_body(data, dict)
@@ -383,7 +383,7 @@ def test_coerce_body_pydantic_creates_instance() -> None:
     """coerce_body creates a Pydantic model from dict."""
     from pydantic import BaseModel
 
-    from rivex._bodies import coerce_body
+    from rivex.core._bodies import coerce_body
 
     class User(BaseModel):
         name: str
@@ -401,7 +401,7 @@ def test_coerce_body_json_string() -> None:
 
     from pydantic import BaseModel
 
-    from rivex._bodies import coerce_body
+    from rivex.core._bodies import coerce_body
 
     class User(BaseModel):
         name: str
@@ -415,7 +415,7 @@ def test_coerce_body_pydantic() -> None:
     """coerce_body handles Pydantic models."""
     from pydantic import BaseModel
 
-    from rivex._bodies import coerce_body
+    from rivex.core._bodies import coerce_body
 
     class User(BaseModel):
         name: str
@@ -428,7 +428,7 @@ def test_coerce_body_pydantic() -> None:
 
 def test_coerce_body_dict() -> None:
     """coerce_body passes dicts through."""
-    from rivex._bodies import coerce_body
+    from rivex.core._bodies import coerce_body
 
     data = {"x": 1, "y": "hello"}
     result = coerce_body(data, dict)
@@ -440,7 +440,7 @@ def test_coerce_body_unsupported_type() -> None:
     import pytest
 
     from rivex import RequestValidationError
-    from rivex._bodies import coerce_body
+    from rivex.core._bodies import coerce_body
 
     # coerce_body supports dict, bytes, str — but not list (list is not JSON-decodable)
     with pytest.raises(RequestValidationError):
@@ -451,7 +451,7 @@ def test_is_body_model_pydantic() -> None:
     """is_body_model detects Pydantic models."""
     from pydantic import BaseModel
 
-    from rivex._bodies import is_body_model
+    from rivex.core._bodies import is_body_model
 
     class Foo(BaseModel):
         x: int
@@ -465,7 +465,7 @@ def test_is_body_model_pydantic() -> None:
 
 def test_is_body_model_unknown() -> None:
     """is_body_model returns False for truly unknown types."""
-    from rivex._bodies import is_body_model
+    from rivex.core._bodies import is_body_model
 
     # int and object are not recognized as body types
     assert is_body_model(int) is False
@@ -476,7 +476,7 @@ def test_is_body_model_dataclass() -> None:
     """is_body_model detects dataclasses."""
     from dataclasses import dataclass
 
-    from rivex._bodies import is_body_model
+    from rivex.core._bodies import is_body_model
 
     @dataclass
     class Foo:
@@ -491,7 +491,7 @@ def test_is_body_model_attrs() -> None:
         import attr
     except ImportError:
         pytest.skip("attrs not installed")
-    from rivex._bodies import is_body_model
+    from rivex.core._bodies import is_body_model
 
     @attr.s
     class Foo:
@@ -506,7 +506,7 @@ def test_is_body_model_msgspec() -> None:
         import msgspec
     except ImportError:
         pytest.skip("msgspec not installed")
-    from rivex._bodies import is_body_model
+    from rivex.core._bodies import is_body_model
 
     class Foo(msgspec.Struct):
         x: int
@@ -520,7 +520,7 @@ def test_is_body_model_marshmallow() -> None:
         import marshmallow
     except ImportError:
         pytest.skip("marshmallow not installed")
-    from rivex._bodies import is_body_model
+    from rivex.core._bodies import is_body_model
 
     class Foo(marshmallow.Schema):
         x = marshmallow.fields.Int()
@@ -530,7 +530,7 @@ def test_is_body_model_marshmallow() -> None:
 
 def test_coerce_form_data_dict() -> None:
     """coerce_form_data with a dict hint passes through."""
-    from rivex._bodies import coerce_form_data
+    from rivex.core._bodies import coerce_form_data
 
     data = {"name": "Alice", "age": "30"}
     result = coerce_form_data(data, dict)
@@ -542,7 +542,7 @@ def test_coerce_form_data_pydantic() -> None:
     """coerce_form_data with a Pydantic model hint coerces fields."""
     from pydantic import BaseModel
 
-    from rivex._bodies import coerce_form_data
+    from rivex.core._bodies import coerce_form_data
 
     class User(BaseModel):
         name: str
@@ -556,7 +556,7 @@ def test_coerce_form_data_pydantic() -> None:
 
 def test_coerce_form_data_keeps_strings() -> None:
     """coerce_form_data passes through string fields unchanged."""
-    from rivex._bodies import coerce_form_data
+    from rivex.core._bodies import coerce_form_data
 
     data = {"name": "Alice"}
     result = coerce_form_data(data, {"name": str})

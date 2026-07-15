@@ -16,7 +16,7 @@ def test_k8s_probes_registered():
     async def root():
         return {"status": 200, "headers": [], "body": b"ok"}
 
-    from rivex.testing import TestClient
+    from rivex.testing.testing import TestClient
     client = TestClient(app)
 
     resp = client.get("/healthz")
@@ -37,7 +37,7 @@ def test_k8s_probes_with_custom_paths():
     async def root():
         return {"status": 200, "headers": [], "body": b"ok"}
 
-    from rivex.testing import TestClient
+    from rivex.testing.testing import TestClient
     client = TestClient(app)
 
     assert client.get("/live").status_code == 200
@@ -68,7 +68,7 @@ def test_graceful_shutdown_hooks():
     async def root():
         return {"status": 200, "headers": [], "body": b"ok"}
 
-    from rivex.testing import TestClient
+    from rivex.testing.testing import TestClient
     client = TestClient(app)
     client.get("/")
     client.__exit__(None, None, None)

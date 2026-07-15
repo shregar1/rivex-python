@@ -88,7 +88,7 @@ def test_aws_lambda_handler_errors_gracefully():
 
     handler = AwsLambdaHandler(app)
 
-    from rivex._compat import HAS_CORE
+    from rivex.core._compat import HAS_CORE
     event = {
         "version": "1.0",
         "httpMethod": "GET",

@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from rivex import Rivex
-from rivex.asyncapi import build_asyncapi_html, generate_asyncapi
-from rivex.testing import TestClient
+from rivex.openapi.asyncapi import build_asyncapi_html, generate_asyncapi
+from rivex.testing.testing import TestClient
 
 
 def test_generate_asyncapi_no_routes():

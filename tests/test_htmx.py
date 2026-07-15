@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from rivex import Rivex
-from rivex.htmx import (
+from rivex.web.htmx import (
     HtmxDetails,
     HtmxResponse,
     HXLocation,
@@ -12,7 +12,7 @@ from rivex.htmx import (
     HXRetarget,
     HXSwap,
 )
-from rivex.requests import Request
+from rivex.core.requests import Request
 
 
 def test_htmx_details_detects_htmx_request():
@@ -223,7 +223,7 @@ def test_htmx_details_on_route():
             return {"status": 200, "headers": [("content-type", "text/plain")], "body": b"partial"}
         return {"status": 200, "headers": [("content-type", "text/plain")], "body": b"full"}
 
-    from rivex.testing import TestClient
+    from rivex.testing.testing import TestClient
     client = TestClient(app)
 
     resp = client.get("/htmx-test")

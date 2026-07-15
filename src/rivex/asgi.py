@@ -5,7 +5,7 @@ from collections.abc import Callable
 from typing import Any
 
 import rivex_core
-from rivex._injection import build_handler_wrapper
+from rivex.core._injection import build_handler_wrapper
 
 
 class ASGIAdapter:
@@ -90,7 +90,7 @@ class ASGIAdapter:
             )
             handler = self._apply_middleware(wrapper)
             if jwt_config:
-                from rivex.auth import _build_jwt_wrapper
+                from rivex.auth.auth import _build_jwt_wrapper
                 handler = _build_jwt_wrapper(handler, jwt_config)
             if record.host:
                 self._host_routes.setdefault(record.host, []).append(
@@ -145,7 +145,7 @@ class ASGIAdapter:
                 pass
 
     def _apply_middleware(self, handler: Callable) -> Callable:
-        from rivex._mw_utils import apply_middleware_chain
+        from rivex.middleware._mw_utils import apply_middleware_chain
 
         return apply_middleware_chain(handler, self._app._middleware)
 
@@ -484,7 +484,7 @@ class ASGIWebSocket:
         while True:
             message = await self._receive()
             if message["type"] == "websocket.disconnect":
-                from rivex.exceptions import WebSocketDisconnect
+                from rivex.core.exceptions import WebSocketDisconnect
 
                 raise WebSocketDisconnect(code=message.get("code", 1000))
             if message["type"] in ("websocket.connect", "websocket.accept"):
@@ -498,7 +498,7 @@ class ASGIWebSocket:
         while True:
             message = await self._receive()
             if message["type"] == "websocket.disconnect":
-                from rivex.exceptions import WebSocketDisconnect
+                from rivex.core.exceptions import WebSocketDisconnect
 
                 raise WebSocketDisconnect(code=message.get("code", 1000))
             if message["type"] in ("websocket.connect", "websocket.accept"):

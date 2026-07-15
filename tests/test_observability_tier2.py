@@ -29,7 +29,7 @@ import urllib.request
 import pytest
 
 import rivex
-from rivex.middleware_observability import (
+from rivex.middleware.middleware_observability import (
     HealthCheckMiddleware,
     JsonLoggingMiddleware,
     PrometheusMetricsMiddleware,

@@ -6,8 +6,8 @@ import tempfile
 from pathlib import Path
 
 from rivex import Rivex
-from rivex.staticfiles import StaticFiles, _parse_range
-from rivex.testing import TestClient
+from rivex.web.staticfiles import StaticFiles, _parse_range
+from rivex.testing.testing import TestClient
 
 
 def test_parse_range_full():

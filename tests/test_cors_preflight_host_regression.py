@@ -19,7 +19,7 @@ from __future__ import annotations
 from typing import Any, Callable
 
 from rivex import Rivex
-from rivex.middleware import CORSMiddleware
+from rivex.middleware.middleware import CORSMiddleware
 
 
 class _FakeServer:

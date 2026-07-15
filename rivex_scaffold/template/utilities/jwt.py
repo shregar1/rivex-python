@@ -6,13 +6,13 @@ import time
 import uuid
 from typing import Any
 
-from rivex.jwt import (
+from rivex.auth.jwt import (
     ExpiredTokenError,
     InvalidTokenError,
     JWTError,
 )
-from rivex.jwt import decode as jwt_decode
-from rivex.jwt import encode as jwt_encode
+from rivex.auth.jwt import decode as jwt_decode
+from rivex.auth.jwt import encode as jwt_encode
 
 from abstractions.utility import IUtility
 from configs import Settings

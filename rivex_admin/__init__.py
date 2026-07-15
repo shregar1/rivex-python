@@ -23,7 +23,7 @@ from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
-    from rivex.applications import Rivex
+    from rivex.core.applications import Rivex
 
 try:  # pragma: no cover
     from rivex_admin.db import default_db_path as _admin_default_db_path
@@ -436,7 +436,7 @@ def register_admin_routes(
         return has_static_token
 
     if _static_files is None:
-        from rivex.staticfiles import StaticFiles as _static_files
+        from rivex.web.staticfiles import StaticFiles as _static_files
     assert _static_files is not None
 
     base = base_path.rstrip("/")

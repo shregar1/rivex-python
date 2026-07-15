@@ -26,7 +26,7 @@ def _load_module(name: str, relative: str):
     return mod
 
 
-_bodies = _load_module("rivex_bodies_under_test", "_bodies.py")
+_bodies = _load_module("rivex_bodies_under_test", "core/_bodies.py")
 
 
 # ---------------------------------------------------------------------------
@@ -105,7 +105,7 @@ def test_coerce_body_dict_from_passthrough() -> None:
 
 
 def test_coerce_body_dict_invalid_json_raises() -> None:
-    from rivex.exceptions import RequestValidationError
+    from rivex.core.exceptions import RequestValidationError
 
     with pytest.raises(RequestValidationError):
         _bodies.coerce_body(b"not json", dict)
@@ -227,7 +227,7 @@ def test_coerce_body_marshmallow_validation_error() -> None:
         # require ``name`` to be a non-empty string; missing key fails.
         name = fields.String(required=True, validate=validate.Length(min=1))
 
-    from rivex.exceptions import RequestValidationError
+    from rivex.core.exceptions import RequestValidationError
 
     # Missing required field -> marshmallow raises, Rivex wraps it.
     with pytest.raises((RequestValidationError, ValidationError)):
@@ -283,7 +283,7 @@ def test_register_body_schema_extends_detection() -> None:
 
 
 def test_coerce_body_unknown_type_raises() -> None:
-    from rivex.exceptions import RequestValidationError
+    from rivex.core.exceptions import RequestValidationError
 
     class Unrelated:
         pass
@@ -293,14 +293,14 @@ def test_coerce_body_unknown_type_raises() -> None:
 
 
 def test_coerce_body_unsupported_body_type() -> None:
-    from rivex.exceptions import RequestValidationError
+    from rivex.core.exceptions import RequestValidationError
 
     with pytest.raises(RequestValidationError):
         _bodies.coerce_body(12345, dict)
 
 
 def test_coerce_body_invalid_utf8() -> None:
-    from rivex.exceptions import RequestValidationError
+    from rivex.core.exceptions import RequestValidationError
 
     with pytest.raises(RequestValidationError):
         _bodies.coerce_body(b"\xff\xfe", dict)

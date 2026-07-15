@@ -269,7 +269,7 @@ def test_createsuperuser_routes_to_admin_cli(tmp_path, monkeypatch, capsys):
             "-c",
             "import sys; sys.argv = ['rivex', 'createsuperuser']; "
             "sys.path.insert(0, '.'); "
-            "from rivex.cli import main; main()",
+            "from rivex.cli.cli import main; main()",
         ],
         input="autotest\n\n\n",  # username, then empty token, then confirm
         capture_output=True,

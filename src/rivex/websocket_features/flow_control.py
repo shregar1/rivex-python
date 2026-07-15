@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from rivex.exceptions import WebSocketDisconnect
+from rivex.core.exceptions import WebSocketDisconnect
 
 try:
     import rivex_core as _rc

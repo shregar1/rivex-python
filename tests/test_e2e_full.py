@@ -114,7 +114,7 @@ from rivex import (
 from rivex import (
     Path as PathParam,
 )
-from rivex.sessions import SessionMiddleware
+from rivex.middleware.sessions import SessionMiddleware
 
 # ============================================================================
 # Pydantic Models
@@ -607,7 +607,7 @@ def build_app() -> Rivex:
 
     @app.get("/responses/file")
     async def resp_file():
-        from rivex.responses import FileResponse
+        from rivex.core.responses import FileResponse
 
         path = os.path.join(tempfile.gettempdir(), "rivex_test_file.txt")
         with open(path, "w") as f:
@@ -825,7 +825,7 @@ def build_app() -> Rivex:
     # ── OpenAPI ──
     @app.get("/custom-openapi")
     async def custom_openapi():
-        from rivex.openapi import generate_openapi
+        from rivex.openapi.openapi import generate_openapi
 
         spec = generate_openapi(
             title=app.title,
@@ -1527,14 +1527,14 @@ class TestJWTDirect:
         assert decoded["role"] == "admin"
 
     def test_expired_token(self):
-        from rivex.jwt import ExpiredTokenError
+        from rivex.auth.jwt import ExpiredTokenError
 
         token = jwt_encode({"sub": "test"}, JWT_SECRET, expires_in=-1)
         with pytest.raises(ExpiredTokenError):
             jwt_decode(token, JWT_SECRET)
 
     def test_invalid_signature(self):
-        from rivex.jwt import InvalidTokenError
+        from rivex.auth.jwt import InvalidTokenError
 
         token = jwt_encode({"sub": "test"}, JWT_SECRET)
         with pytest.raises(InvalidTokenError):

@@ -72,7 +72,7 @@ class AutoMigrator:
 
         # Discover declared models from app.db.models()
         try:
-            from rivex.applications import Rivex
+            from rivex.core.applications import Rivex
             app = Rivex.get_current()
         except Exception:
             return {"add_tables": [], "drop_tables": [], "add_columns": [], "drop_columns": []}

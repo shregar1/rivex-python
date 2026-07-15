@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from rivex import Rivex
-from rivex.middleware import RateLimitMiddleware
+from rivex.middleware.middleware import RateLimitMiddleware
 
 
 def test_rate_limit_ip_default_strategy():
@@ -43,7 +43,7 @@ def test_rate_limit_key_header_fallback_to_ip():
 
 def test_rate_limit_ip_key():
     m = RateLimitMiddleware(rate=10, per=1.0)
-    from rivex._compat import client_ip
+    from rivex.core._compat import client_ip
     key = m._key({"headers": [("x-forwarded-for", "1.2.3.4")]})
     assert key == "1.2.3.4"
 
@@ -57,7 +57,7 @@ def test_rate_limit_token_bucket_allows_up_to_rate(tmp_path):
     async def handler():
         return {"status": 200, "headers": [], "body": b"ok"}
 
-    from rivex.testing import TestClient
+    from rivex.testing.testing import TestClient
     client = TestClient(app)
 
     for i in range(5):
@@ -77,7 +77,7 @@ def test_rate_limit_different_ips_independent():
     async def handler():
         return {"status": 200, "headers": [], "body": b"ok"}
 
-    from rivex.testing import TestClient
+    from rivex.testing.testing import TestClient
     client = TestClient(app)
 
     resp1 = client.get("/test", headers={"X-Forwarded-For": "10.0.0.1"})

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import secrets
 
-from rivex.crypto import (
+from rivex.auth.crypto import (
     aes_gcm_decrypt,
     aes_gcm_encrypt,
     hmac_sha256,

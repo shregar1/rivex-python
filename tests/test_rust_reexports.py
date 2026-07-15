@@ -27,7 +27,7 @@ def test_top_level_validators():
 
 
 def test_crypto_submodule():
-    from rivex.crypto import aes_gcm_encrypt, hmac_sha256, random_token, sha256
+    from rivex.auth.crypto import aes_gcm_encrypt, hmac_sha256, random_token, sha256
 
     assert len(sha256(b"hello")) == 64
     assert len(random_token(16)) >= 16
@@ -40,7 +40,7 @@ def test_crypto_submodule():
 
 
 def test_jwt_uses_core_expires_in_api():
-    from rivex.jwt import decode, encode
+    from rivex.auth.jwt import decode, encode
 
     token = encode({"sub": "user-1"}, "secret", expires_in=3600)
     payload = decode(token, "secret")

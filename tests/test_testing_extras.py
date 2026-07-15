@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from rivex import Rivex, TestClient
-from rivex.dependencies import Depends
+from rivex.core.dependencies import Depends
 
 
 async def real_db() -> str:
@@ -63,17 +63,17 @@ def test_dependency_override_integration():
 
 
 def test_testing_fixtures_app():
-    from rivex.testing_fixtures import app as fx_app
+    from rivex.testing.testing_fixtures import app as fx_app
 
     assert callable(fx_app)
 
 
 def test_testing_fixtures_client():
-    from rivex.testing_fixtures import client as fx_client
+    from rivex.testing.testing_fixtures import client as fx_client
 
     assert callable(fx_client)
 
 
 def test_cli_test_command_import():
-    from rivex.cli import _run_test
+    from rivex.cli.cli import _run_test
     assert callable(_run_test)

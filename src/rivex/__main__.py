@@ -1,3 +1,3 @@
-from rivex.cli import main
+from rivex.cli.cli import main
 
 main()

@@ -18,8 +18,8 @@ from rivex import (
     Rivex,
     TestClient,
 )
-from rivex.exceptions import RequestValidationError, WebSocketDisconnect
-from rivex.security import (
+from rivex.core.exceptions import RequestValidationError, WebSocketDisconnect
+from rivex.auth.security import (
     APIKeyCookie,
     APIKeyQuery,
     HTTPBasic,
@@ -559,7 +559,7 @@ class TestStaticFiles:
             with open(filepath, "w") as f:
                 f.write("body { color: red; }")
 
-            from rivex.staticfiles import StaticFiles
+            from rivex.web.staticfiles import StaticFiles
 
             static = StaticFiles(directory=tmpdir)
 
@@ -571,7 +571,7 @@ class TestStaticFiles:
 
     def test_missing_file_404(self):
         with tempfile.TemporaryDirectory() as tmpdir:
-            from rivex.staticfiles import StaticFiles
+            from rivex.web.staticfiles import StaticFiles
 
             static = StaticFiles(directory=tmpdir)
 
@@ -582,7 +582,7 @@ class TestStaticFiles:
 
     def test_directory_traversal_blocked(self):
         with tempfile.TemporaryDirectory() as tmpdir:
-            from rivex.staticfiles import StaticFiles
+            from rivex.web.staticfiles import StaticFiles
 
             static = StaticFiles(directory=tmpdir)
 
@@ -607,8 +607,8 @@ class TestWebSocketDisconnect:
 
 class TestOpenAPINewParams:
     def test_query_param_in_openapi(self):
-        from rivex.openapi import generate_openapi
-        from rivex.routing import RouteRecord
+        from rivex.openapi.openapi import generate_openapi
+        from rivex.core.routing import RouteRecord
 
         async def endpoint(q: str = Query(..., description="Search query", min_length=1)):
             pass
@@ -634,8 +634,8 @@ class TestOpenAPINewParams:
         assert p["schema"]["minLength"] == 1
 
     def test_header_param_in_openapi(self):
-        from rivex.openapi import generate_openapi
-        from rivex.routing import RouteRecord
+        from rivex.openapi.openapi import generate_openapi
+        from rivex.core.routing import RouteRecord
 
         async def endpoint(x_token: str = Header(...)):
             pass
@@ -657,8 +657,8 @@ class TestOpenAPINewParams:
         assert params[0]["name"] == "x-token"
 
     def test_cookie_param_in_openapi(self):
-        from rivex.openapi import generate_openapi
-        from rivex.routing import RouteRecord
+        from rivex.openapi.openapi import generate_openapi
+        from rivex.core.routing import RouteRecord
 
         async def endpoint(session: str = Cookie("guest")):
             pass
@@ -680,8 +680,8 @@ class TestOpenAPINewParams:
         assert params[0]["required"] is False
 
     def test_path_param_with_constraints_in_openapi(self):
-        from rivex.openapi import generate_openapi
-        from rivex.routing import RouteRecord
+        from rivex.openapi.openapi import generate_openapi
+        from rivex.core.routing import RouteRecord
 
         async def endpoint(item_id: int = Path(..., ge=1, le=1000)):
             pass

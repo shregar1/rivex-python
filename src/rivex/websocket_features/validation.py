@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from rivex.exceptions import WebSocketDisconnect
+from rivex.core.exceptions import WebSocketDisconnect
 
 try:
     import rivex_core as _rc

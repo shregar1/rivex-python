@@ -17,32 +17,32 @@ from rivex._rust import (
     validate_uuid,
     verify_password,
 )
-from rivex.applications import FastAPI, Rivex
+from rivex.core.applications import FastAPI, Rivex
 from rivex.asgi import ASGIAdapter, ASGIWebSocket
-from rivex.auth import (
+from rivex.auth.auth import (
     admin_only,
     authenticated,
     current_user,
     get_user_resolver,
     set_user_resolver,
 )
-from rivex.background import BackgroundTask, BackgroundTasks
-from rivex.broadcast import (
+from rivex.lifecycle.background import BackgroundTask, BackgroundTasks
+from rivex.lifecycle.broadcast import (
     ChannelLayer,
     Room,
     WebSocketBroadcast,
     WebSocketChannel,
 )
-from rivex.caching import CacheMiddleware, ETagMiddleware, cached_response
-from rivex.concurrency import run_in_threadpool
-from rivex.contenttypes import (
+from rivex.data.caching import CacheMiddleware, ETagMiddleware, cached_response
+from rivex.lifecycle.concurrency import run_in_threadpool
+from rivex.web.contenttypes import (
     ContentTypeRegistry,
     GenericForeignKey,
     GenericRelation,
     get_content_type,
     get_object,
 )
-from rivex.context import (
+from rivex.core.context import (
     RequestContext,
     RequestContextMiddleware,
     bind_extra,
@@ -53,15 +53,15 @@ from rivex.context import (
     current_user_id,
     request_context,
 )
-from rivex.csrf import CSRFMiddleware
+from rivex.middleware.csrf import CSRFMiddleware
 from rivex.datastructures import Headers
 from rivex.db import DatabaseConfig, DatabasePool, DatabaseRegistry
 from rivex.db.automigrate import AutoMigrator
 from rivex.db.router import DatabaseRouter, RouterRegistry, using
 from rivex.db.transactions import Transaction, atomic
-from rivex.debugtoolbar import DebugToolbarMiddleware
-from rivex.dependencies import Dependency, Depends
-from rivex.email import (
+from rivex.observability.debugtoolbar import DebugToolbarMiddleware
+from rivex.core.dependencies import Dependency, Depends
+from rivex.web.email import (
     ConsoleBackend,
     EmailBackend,
     EmailMessage,
@@ -70,7 +70,7 @@ from rivex.email import (
     get_email_backend,
     send_email,
 )
-from rivex.encoders import jsonable_encoder
+from rivex.serialization.encoders import jsonable_encoder
 from rivex.events import (
     Signal,
     request_failed,
@@ -79,37 +79,37 @@ from rivex.events import (
     server_shutdown,
     server_startup,
 )
-from rivex.exceptions import HTTPException, RequestValidationError, WebSocketDisconnect
-from rivex.feeds import AtomFeed, RssFeed, Sitemap, SitemapIndex
-from rivex.forms import (
+from rivex.core.exceptions import HTTPException, RequestValidationError, WebSocketDisconnect
+from rivex.protocols.feeds import AtomFeed, RssFeed, Sitemap, SitemapIndex
+from rivex.web.forms import (
     BooleanField as BooleanField,
 )
-from rivex.forms import (
+from rivex.web.forms import (
     CharField as CharField,
 )
-from rivex.forms import (
+from rivex.web.forms import (
     EmailField as EmailField,
 )
-from rivex.forms import (
+from rivex.web.forms import (
     FormField as FormField,
 )
-from rivex.forms import (
+from rivex.web.forms import (
     IntegerField as IntegerField,
 )
-from rivex.forms import (
+from rivex.web.forms import (
     PasswordField as PasswordField,
 )
-from rivex.forms import (
+from rivex.web.forms import (
     SelectField as SelectField,
 )
-from rivex.forms import (
+from rivex.web.forms import (
     TextAreaField as TextAreaField,
 )
-from rivex.forms import (
+from rivex.web.forms import (
     ValidationError as ValidationError,
 )
-from rivex.gen import F, JsonBytes, gen
-from rivex.gis import (
+from rivex.serialization.gen import F, JsonBytes, gen
+from rivex.web.gis import (
     GeographyColumn,
     GeometryCollection,
     GeometryColumn,
@@ -125,11 +125,11 @@ from rivex.gis import (
     to_geojson,
 )
 from rivex.graphql import GraphQLMiddleware, graphql_mutation, graphql_query
-from rivex.grpc import GrpcClient, GrpcServer
-from rivex.grpc_web import GrpcWebMiddleware, GrpcWebServer
-from rivex.guards import AllowAll, DenyAll, Guard, GuardMiddleware, IsAuthenticated, RequiresRoles
-from rivex.health import HealthCheck
-from rivex.htmx import (
+from rivex.protocols.grpc import GrpcClient, GrpcServer
+from rivex.protocols.grpc_web import GrpcWebMiddleware, GrpcWebServer
+from rivex.auth.guards import AllowAll, DenyAll, Guard, GuardMiddleware, IsAuthenticated, RequiresRoles
+from rivex.observability.health import HealthCheck
+from rivex.web.htmx import (
     HtmxDetails,
     HtmxResponse,
     HXLocation,
@@ -140,8 +140,8 @@ from rivex.htmx import (
     HXRetarget,
     HXSwap,
 )
-from rivex.http3 import Http3Client, Http3Server
-from rivex.i18n import (
+from rivex.protocols.http3 import Http3Client, Http3Server
+from rivex.web.i18n import (
     LocaleMiddleware,
     Translations,
     format_currency,
@@ -153,11 +153,11 @@ from rivex.i18n import (
     pgettext,
     set_locale,
 )
-from rivex.jsonrpc import JSONRPCMiddleware, XMLRPCMiddleware
-from rivex.jwt import ExpiredTokenError, InvalidTokenError, JWTBearer, JWTError
-from rivex.jwt import decode as jwt_decode
-from rivex.jwt import encode as jwt_encode
-from rivex.management import (
+from rivex.protocols.jsonrpc import JSONRPCMiddleware, XMLRPCMiddleware
+from rivex.auth.jwt import ExpiredTokenError, InvalidTokenError, JWTBearer, JWTError
+from rivex.auth.jwt import decode as jwt_decode
+from rivex.auth.jwt import encode as jwt_encode
+from rivex.cli.management import (
     BaseCommand,
     CommandError,
     discover_commands,
@@ -165,8 +165,8 @@ from rivex.management import (
     get_command,
     register_command,
 )
-from rivex.metrics import Counter, Gauge, Histogram, MetricsMiddleware, MetricsRegistry
-from rivex.middleware import (
+from rivex.observability.metrics import Counter, Gauge, Histogram, MetricsMiddleware, MetricsRegistry
+from rivex.middleware.middleware import (
     AccessLogMiddleware,
     CompressionMiddleware,
     CORSMiddleware,
@@ -186,19 +186,19 @@ from rivex.middleware import (
 )
 
 # New features
-from rivex.middleware_csp import CSPMiddleware
-from rivex.mqtt import MQTTBridge
-from rivex.negotiation import best_match, parse_accept
-from rivex.otel import (
+from rivex.middleware.middleware_csp import CSPMiddleware
+from rivex.protocols.mqtt import MQTTBridge
+from rivex.web.negotiation import best_match, parse_accept
+from rivex.observability.otel import (
     OpenTelemetryMiddleware,
     configure_otel,
     get_tracer,
     set_tracer,
 )
-from rivex.pagination import CursorPage, Page, paginate
-from rivex.params import Body, Cookie, Header, Path, Query
-from rivex.password_reset import PasswordReset, PasswordResetMiddleware
-from rivex.permissions import (
+from rivex.data.pagination import CursorPage, Page, paginate
+from rivex.core.params import Body, Cookie, Header, Path, Query
+from rivex.auth.password_reset import PasswordReset, PasswordResetMiddleware
+from rivex.auth.permissions import (
     DEFAULT_PERMISSIONS,
     ModelPermission,
     ObjectPermissionBackend,
@@ -209,7 +209,7 @@ from rivex.permissions import (
     permission_required,
     register_permission,
 )
-from rivex.plugins import Plugin
+from rivex.cli.plugins import Plugin
 from rivex.problem import (
     ProblemDetail,
     ProblemException,
@@ -223,9 +223,9 @@ from rivex.problem import (
     unauthorized,
     unprocessable,
 )
-from rivex.rawsocket import RawTCPServer, UDPBroadcastServer, UnixSocketServer
-from rivex.requests import Request
-from rivex.responses import (
+from rivex.protocols.rawsocket import RawTCPServer, UDPBroadcastServer, UnixSocketServer
+from rivex.core.requests import Request
+from rivex.core.responses import (
     EventSourceResponse,
     FileResponse,
     HTMLResponse,
@@ -236,7 +236,7 @@ from rivex.responses import (
     StreamingResponse,
     XMLResponse,
 )
-from rivex.routing import (
+from rivex.core.routing import (
     APIRouter,
     Controller,
     RouteGroup,
@@ -250,14 +250,14 @@ from rivex.routing import (
     put,
     route,
 )
-from rivex.scheduler import Scheduler
-from rivex.schema import Field, Schema
-from rivex.search import (
+from rivex.lifecycle.scheduler import Scheduler
+from rivex.serialization.schema import Field, Schema
+from rivex.data.search import (
     ElasticsearchBackend,
     PostgresSearchBackend,
     SearchBackend,
 )
-from rivex.security import (
+from rivex.auth.security import (
     APIKeyCookie,
     APIKeyHeader,
     APIKeyQuery,
@@ -270,38 +270,38 @@ from rivex.security import (
     OAuth2PasswordRequestForm,
     SecurityScopes,
 )
-from rivex.sentry import (
+from rivex.observability.sentry import (
     SentryMiddleware,
     capture_exception,
     configure_sentry,
     set_extra_context,
     set_user_context,
 )
-from rivex.serialization import deserialize, serialize, set_serializer
-from rivex.serializers import Field as SerializerField
-from rivex.serializers import (
+from rivex.serialization.serialization import deserialize, serialize, set_serializer
+from rivex.serialization.serializers import Field as SerializerField
+from rivex.serialization.serializers import (
     ListSerializer,
     ModelSerializer,
     Serializer,
 )
-from rivex.sessions import SessionMiddleware
+from rivex.middleware.sessions import SessionMiddleware
 from rivex.settings import Settings
-from rivex.social_auth import SocialAuthConfig, SocialAuthMiddleware
-from rivex.socketio import (
+from rivex.auth.social_auth import SocialAuthConfig, SocialAuthMiddleware
+from rivex.protocols.socketio import (
     SocketIOMiddleware,
     SocketIOServer,
     SocketIOSession,
 )
-from rivex.static_pipeline import StaticPipeline
-from rivex.staticfiles import StaticFiles
-from rivex.status import APIStatus, HTTPMethod, HTTPStatus, StatusCode, status
-from rivex.structlog import (
+from rivex.web.static_pipeline import StaticPipeline
+from rivex.web.staticfiles import StaticFiles
+from rivex.core.status import APIStatus, HTTPMethod, HTTPStatus, StatusCode, status
+from rivex.observability.structlog import (
     JSONFormatter,
     StructuredAccessLogMiddleware,
     StructuredLogger,
     configure_logging,
 )
-from rivex.tasks import (
+from rivex.lifecycle.tasks import (
     CeleryTaskQueue,
     RQTaskQueue,
     SimpleTaskQueue,
@@ -309,16 +309,16 @@ from rivex.tasks import (
     TaskQueue,
     task,
 )
-from rivex.templating import Jinja2Templates
-from rivex.testing import TestClient
-from rivex.throttling import (
+from rivex.web.templating import Jinja2Templates
+from rivex.testing.testing import TestClient
+from rivex.middleware.throttling import (
     AnonRateThrottle,
     BaseThrottle,
     ScopedRateThrottle,
     ThrottleMiddleware,
     UserRateThrottle,
 )
-from rivex.tracing import (
+from rivex.observability.tracing import (
     ConsoleSpanExporter,
     OTelSpanExporter,
     Span,
@@ -326,8 +326,8 @@ from rivex.tracing import (
     TracingMiddleware,
     configure_tracing,
 )
-from rivex.uploads import File, Form, MultipartBody, UploadFile
-from rivex.versioning import (
+from rivex.web.uploads import File, Form, MultipartBody, UploadFile
+from rivex.data.versioning import (
     AcceptHeaderVersioning,
     BaseVersioning,
     HeaderVersioning,
@@ -344,8 +344,8 @@ from rivex.viewsets import (
 from rivex.viewsets import (
     Router as ViewSetRouter,
 )
-from rivex.webdav import WebDAVMiddleware
-from rivex.webhooks import WebhookGuard, WebhookVerificationError, verify_signature
+from rivex.web.webdav import WebDAVMiddleware
+from rivex.protocols.webhooks import WebhookGuard, WebhookVerificationError, verify_signature
 
 # WebSocket feature classes — drop-in helpers for common patterns
 from rivex.websocket_features import (
@@ -367,15 +367,15 @@ from rivex.websocket_features import (
     require_ws_auth,
     rpc_method,
 )
-from rivex.websockets import WebSocket
+from rivex.protocols.websockets import WebSocket
 
 # Additional protocols
-from rivex.webtransport import (
+from rivex.protocols.webtransport import (
     WebTransportClient,
     WebTransportServer,
     WebTransportSession,
 )
-from rivex.ws import ConnectionManager
+from rivex.protocols.ws import ConnectionManager
 
 # Admin dashboard — ``rivex_admin`` is an optional companion
 # package.  Users who only want the bare HTTP framework don't pay
@@ -390,7 +390,7 @@ except ImportError:  # pragma: no cover
 # Native body-type coercion: Pydantic, Schemax, Marshmallow, or raw dict.
 # Importing this module never fails — the availability of each backend
 # depends on whether the corresponding optional dependency is installed.
-from rivex._bodies import (
+from rivex.core._bodies import (
     SCHEMAS,
     BodySchema,
     body_schema,

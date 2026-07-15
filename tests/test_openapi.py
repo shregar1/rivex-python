@@ -1,11 +1,11 @@
 from pydantic import BaseModel
 
-from rivex.applications import Rivex
-from rivex.dependencies import Depends
-from rivex.openapi import generate_openapi
-from rivex.params import Path
-from rivex.routing import Controller, RouteRecord, get, post
-from rivex.security import APIKeyHeader, OAuth2PasswordBearer
+from rivex.core.applications import Rivex
+from rivex.core.dependencies import Depends
+from rivex.openapi.openapi import generate_openapi
+from rivex.core.params import Path
+from rivex.core.routing import Controller, RouteRecord, get, post
+from rivex.auth.security import APIKeyHeader, OAuth2PasswordBearer
 
 
 def test_basic_spec_structure():

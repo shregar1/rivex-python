@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from rivex.gen import CompiledGen, F, JsonBytes, gen
+from rivex.serialization.gen import CompiledGen, F, JsonBytes, gen
 from rivex_core import GenField
 
 
@@ -571,7 +571,7 @@ class TestJsonBytesIntegration:
     def test_handler_returns_jsonbytes(self):
         """Framework should recognise JsonBytes and set JSON content-type."""
         from rivex import Rivex
-        from rivex.testing import TestClient
+        from rivex.testing.testing import TestClient
 
         app = Rivex()
 

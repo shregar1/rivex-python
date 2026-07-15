@@ -5,8 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from rivex import Rivex
-from rivex.staticfiles import StaticFiles, _file_etag
-from rivex.testing import TestClient
+from rivex.web.staticfiles import StaticFiles, _file_etag
+from rivex.testing.testing import TestClient
 
 
 def test_etag_included_in_response(tmp_path: Path):

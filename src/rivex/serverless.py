@@ -230,7 +230,7 @@ class VercelHandler(ServerlessAdapter):
         scope = self._asgi_scope(method, path, headers_raw, body, qs)
         raw = await self._run_asgi(scope, body)
 
-        from rivex.responses import Response
+        from rivex.core.responses import Response
 
         resp = Response(
             content=raw.get("body", b""),

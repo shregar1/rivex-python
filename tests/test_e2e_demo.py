@@ -199,7 +199,7 @@ def test_openapi_response_model(demo_app) -> None:
 
 def test_build_server_html_renders_brand() -> None:
     """build_server_html includes the app name as a wordmark."""
-    from rivex.openapi import build_server_html
+    from rivex.openapi.openapi import build_server_html
 
     html = build_server_html(
         title="My API",
@@ -216,7 +216,7 @@ def test_build_server_html_renders_brand() -> None:
 
 def test_build_server_html_with_alpinejs() -> None:
     """build_server_html loads Alpine.js and has theme toggle."""
-    from rivex.openapi import build_server_html
+    from rivex.openapi.openapi import build_server_html
 
     html = build_server_html(title="X", version="1", admin_url="/admin")
     assert "alpine.min.js" in html
@@ -226,7 +226,7 @@ def test_build_server_html_with_alpinejs() -> None:
 
 def test_build_server_html_signin_form() -> None:
     """build_server_html has a sign-in form when admin_url is set."""
-    from rivex.openapi import build_server_html
+    from rivex.openapi.openapi import build_server_html
 
     html = build_server_html(title="X", version="1", admin_url="/admin")
     assert 'hx-post="/admin/session"' in html
@@ -236,7 +236,7 @@ def test_build_server_html_signin_form() -> None:
 
 def test_build_server_html_no_admin() -> None:
     """No admin_url → no sign-in form."""
-    from rivex.openapi import build_server_html
+    from rivex.openapi.openapi import build_server_html
 
     html = build_server_html(title="X", version="1", admin_url=None)
     assert "hx-post" not in html
@@ -248,7 +248,7 @@ def test_build_server_html_no_admin() -> None:
 
 def test_build_docs_html_renders_brand() -> None:
     """build_docs_html (via _fallback_docs_html) renders the brand."""
-    from rivex.openapi import _fallback_docs_html
+    from rivex.openapi.openapi import _fallback_docs_html
 
     html = _fallback_docs_html("My API", "/openapi.json", app_name="MyApp")
     assert "MYAPP" in html or "MyApp" in html
@@ -260,7 +260,7 @@ def test_build_docs_html_renders_brand() -> None:
 
 def test_build_docs_html_theme_toggle() -> None:
     """Docs page has a dark/light theme toggle."""
-    from rivex.openapi import _fallback_docs_html
+    from rivex.openapi.openapi import _fallback_docs_html
 
     html = _fallback_docs_html("X", "/openapi.json")
     assert "icon-sun" in html
@@ -270,7 +270,7 @@ def test_build_docs_html_theme_toggle() -> None:
 
 def test_build_docs_html_search_input() -> None:
     """Docs page has a search filter for endpoints."""
-    from rivex.openapi import _fallback_docs_html
+    from rivex.openapi.openapi import _fallback_docs_html
 
     html = _fallback_docs_html("X", "/openapi.json")
     assert "Filter endpoints" in html
@@ -279,7 +279,7 @@ def test_build_docs_html_search_input() -> None:
 
 def test_build_docs_html_no_hero() -> None:
     """Hero section was removed."""
-    from rivex.openapi import _fallback_docs_html
+    from rivex.openapi.openapi import _fallback_docs_html
 
     html = _fallback_docs_html("X", "/openapi.json")
     assert 'class="hero"' not in html
@@ -291,7 +291,7 @@ def test_build_docs_html_no_hero() -> None:
 
 def test_build_admin_html_renders_brand() -> None:
     """build_admin_html (via _fallback_admin_html) renders the Vexarr admin shell."""
-    from rivex.openapi import _fallback_admin_html
+    from rivex.openapi.openapi import _fallback_admin_html
 
     html = _fallback_admin_html(
         title="Admin",
@@ -316,7 +316,7 @@ def test_build_admin_html_renders_brand() -> None:
 
 def test_build_admin_html_top_bar_pills() -> None:
     """Admin shell has the top bar with status + theme + sign-out."""
-    from rivex.openapi import _fallback_admin_html
+    from rivex.openapi.openapi import _fallback_admin_html
 
     html = _fallback_admin_html(
         title="X",
@@ -338,7 +338,7 @@ def test_build_admin_html_top_bar_pills() -> None:
 
 def test_brand_mark_with_accent() -> None:
     """_brand_mark splits last char into accent span when accent=True."""
-    from rivex.openapi import _brand_mark
+    from rivex.openapi.openapi import _brand_mark
 
     result = _brand_mark("Rivex", accent=True)
     assert "RIVE" in result
@@ -347,7 +347,7 @@ def test_brand_mark_with_accent() -> None:
 
 def test_brand_mark_no_accent() -> None:
     """_brand_mark with accent=False returns plain text."""
-    from rivex.openapi import _brand_mark
+    from rivex.openapi.openapi import _brand_mark
 
     result = _brand_mark("Acme", accent=False)
     assert "ACME" in result
@@ -356,7 +356,7 @@ def test_brand_mark_no_accent() -> None:
 
 def test_brand_mark_empty_fallback() -> None:
     """Empty app name falls back to 'Rivex'."""
-    from rivex.openapi import _brand_mark
+    from rivex.openapi.openapi import _brand_mark
 
     result = _brand_mark("", accent=True)
     # Default is "Rivex" uppercased with X in accent span
@@ -366,7 +366,7 @@ def test_brand_mark_empty_fallback() -> None:
 
 def test_brand_mark_single_char() -> None:
     """Single char is returned as-is (no split when len <= 1)."""
-    from rivex.openapi import _brand_mark
+    from rivex.openapi.openapi import _brand_mark
 
     result = _brand_mark("X", accent=True)
     # len("X") <= 1 branch returns the text as-is
@@ -375,7 +375,7 @@ def test_brand_mark_single_char() -> None:
 
 def test_powered_by_rivex() -> None:
     """_powered_by_rivex renders 'powered by RiveX' with accent X."""
-    from rivex.openapi import _powered_by_rivex
+    from rivex.openapi.openapi import _powered_by_rivex
 
     html = _powered_by_rivex()
     assert "powered by" in html
@@ -386,7 +386,7 @@ def test_powered_by_rivex() -> None:
 
 def test_powered_by_general() -> None:
     """_powered_by renders 'powered by <name>'."""
-    from rivex.openapi import _powered_by
+    from rivex.openapi.openapi import _powered_by
 
     html = _powered_by("Acme Cloud")
     assert "powered by Acme Cloud" in html
@@ -394,7 +394,7 @@ def test_powered_by_general() -> None:
 
 def test_powered_by_none() -> None:
     """_powered_by returns empty string for None."""
-    from rivex.openapi import _powered_by
+    from rivex.openapi.openapi import _powered_by
 
     assert _powered_by(None) == ""
     assert _powered_by("") == ""

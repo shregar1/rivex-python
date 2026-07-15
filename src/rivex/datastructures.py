@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from rivex._compat import RC_V2
-from rivex._compat import rc as _rc
+from rivex.core._compat import RC_V2
+from rivex.core._compat import rc as _rc
 
 
 class Headers:

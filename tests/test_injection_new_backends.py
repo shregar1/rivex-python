@@ -19,8 +19,8 @@ from typing import Any
 
 import pytest
 
-from rivex._bodies import BodySchema, body_schema  # noqa: E402
-from rivex._injection import build_handler_wrapper  # noqa: E402
+from rivex.core._bodies import BodySchema, body_schema  # noqa: E402
+from rivex.core._injection import build_handler_wrapper  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Module-level models — type-hint resolution needs them in the test
@@ -161,7 +161,7 @@ def test_body_schema_detects_construct():
 
 
 def test_coerce_body_dataclass_from_bytes():
-    from rivex._bodies import coerce_body
+    from rivex.core._bodies import coerce_body
 
     out = coerce_body(b'{"title": "Widget", "qty": 4}', DCItem)
     assert isinstance(out, DCItem)
@@ -170,8 +170,8 @@ def test_coerce_body_dataclass_from_bytes():
 
 
 def test_coerce_body_dataclass_missing_required_raises():
-    from rivex._bodies import coerce_body
-    from rivex.exceptions import RequestValidationError
+    from rivex.core._bodies import coerce_body
+    from rivex.core.exceptions import RequestValidationError
 
     with pytest.raises(RequestValidationError):
         coerce_body(b'{"qty": 4}', DCItem)  # title is required
@@ -180,7 +180,7 @@ def test_coerce_body_dataclass_missing_required_raises():
 def test_coerce_body_attrs_from_bytes():
     import attr
 
-    from rivex._bodies import coerce_body
+    from rivex.core._bodies import coerce_body
 
     out = coerce_body(b'{"title": "Gear", "qty": 2}', AttrsItem)
     print(
@@ -192,7 +192,7 @@ def test_coerce_body_attrs_from_bytes():
 
 
 def test_coerce_body_attrs_decorator():
-    from rivex._bodies import coerce_body
+    from rivex.core._bodies import coerce_body
 
     out = coerce_body(b'{"title": "Tool"}', AttrsDecItem)
     assert out.title == "Tool"
@@ -200,7 +200,7 @@ def test_coerce_body_attrs_decorator():
 
 
 def test_coerce_body_msgspec_from_bytes():
-    from rivex._bodies import coerce_body
+    from rivex.core._bodies import coerce_body
 
     out = coerce_body(b'{"title": "Spanner", "qty": 9}', MsgspecItem)
     assert out.title == "Spanner"
@@ -209,8 +209,8 @@ def test_coerce_body_msgspec_from_bytes():
 
 def test_coerce_body_msgspec_strict():
     """msgspec.Struct raises on type mismatches when ``strict=True``."""
-    from rivex._bodies import coerce_body
-    from rivex.exceptions import RequestValidationError
+    from rivex.core._bodies import coerce_body
+    from rivex.core.exceptions import RequestValidationError
 
     # qty should be int, not str
     with pytest.raises(RequestValidationError):
@@ -218,7 +218,7 @@ def test_coerce_body_msgspec_strict():
 
 
 def test_coerce_body_construct_from_bytes():
-    from rivex._bodies import coerce_body
+    from rivex.core._bodies import coerce_body
 
     out = coerce_body(b'{"title": "Hammer", "qty": 12}', ConstructItem)
     assert out.title == "Hammer"
@@ -286,7 +286,7 @@ async def test_body_with_construct():
 
 @pytest.mark.asyncio
 async def test_form_with_dataclass():
-    from rivex.uploads import Form
+    from rivex.web.uploads import Form
 
     async def handler(item: DCItem = Form()):
         return {"title": item.title, "qty": item.qty}
@@ -304,7 +304,7 @@ async def test_form_with_dataclass():
 
 @pytest.mark.asyncio
 async def test_form_with_attrs():
-    from rivex.uploads import Form
+    from rivex.web.uploads import Form
 
     async def handler(item: AttrsItem = Form()):
         return {"title": item.title, "qty": item.qty}
@@ -322,7 +322,7 @@ async def test_form_with_attrs():
 
 @pytest.mark.asyncio
 async def test_form_with_msgspec():
-    from rivex.uploads import Form
+    from rivex.web.uploads import Form
 
     async def handler(item: MsgspecItem = Form()):
         return {"title": item.title, "qty": item.qty}
@@ -380,7 +380,7 @@ def test_register_body_schema_for_typeguard():
 
     from dataclasses import dataclass
 
-    from rivex._bodies import coerce_body, register_body_schema
+    from rivex.core._bodies import coerce_body, register_body_schema
 
     @dataclass
     class TGItem:
@@ -402,7 +402,7 @@ def test_register_body_schema_for_typeguard():
         assert out.title == "TG"
         assert out.qty == 7
     finally:
-        from rivex import _bodies as _b
+        from rivex.core import _bodies as _b
 
         _b._CUSTOM_HANDLERS.pop("typeguard", None)
         _b._CUSTOM_DETECTORS[:] = [
@@ -422,7 +422,7 @@ def test_register_body_schema_for_lark_parser():
     except ImportError:
         pytest.skip("lark not installed")
 
-    from rivex._bodies import is_body_model, register_body_schema
+    from rivex.core._bodies import is_body_model, register_body_schema
 
     class LarkWrapped:
         """Marker subclass — body must declare a Lark grammar as
@@ -444,16 +444,16 @@ def test_register_body_schema_for_lark_parser():
         class P(LarkWrapped):
             lark_grammar = 'start: "{" "}"'
 
-        from rivex._bodies import coerce_body
+        from rivex.core._bodies import coerce_body
 
         out = coerce_body(b"{}", P)
         assert out is not None
         assert is_body_model(P) is False  # extended detection only
-        from rivex._bodies import body_schema_extended
+        from rivex.core._bodies import body_schema_extended
 
         assert body_schema_extended(P) == "custom"
     finally:
-        from rivex import _bodies as _b
+        from rivex.core import _bodies as _b
 
         _b._CUSTOM_HANDLERS.pop("lark", None)
         _b._CUSTOM_DETECTORS[:] = [
@@ -470,7 +470,7 @@ def test_register_body_schema_for_pyparsing():
     except ImportError:
         pytest.skip("pyparsing not installed")
 
-    from rivex._bodies import body_schema_extended, register_body_schema
+    from rivex.core._bodies import body_schema_extended, register_body_schema
 
     class PPWrapped:
         pyparsing_expression: Any = None
@@ -489,13 +489,13 @@ def test_register_body_schema_for_pyparsing():
         class P(PPWrapped):
             pyparsing_expression = pyparsing.Suppress("{}")
 
-        from rivex._bodies import coerce_body
+        from rivex.core._bodies import coerce_body
 
         out = coerce_body(b"{}", P)
         assert out == []
         assert body_schema_extended(P) == "custom"
     finally:
-        from rivex import _bodies as _b
+        from rivex.core import _bodies as _b
 
         _b._CUSTOM_HANDLERS.pop("pyparsing", None)
         _b._CUSTOM_DETECTORS[:] = [
@@ -514,7 +514,7 @@ def test_register_body_schema_for_user_agents():
     except ImportError:
         pytest.skip("user_agents not installed")
 
-    from rivex._bodies import body_schema_extended, register_body_schema
+    from rivex.core._bodies import body_schema_extended, register_body_schema
 
     class UAWrapped:
         """Marker — declare a class that the body parser should
@@ -535,14 +535,14 @@ def test_register_body_schema_for_user_agents():
 
     register_body_schema("user-agents", detect=_detect, coerce=_coerce)
     try:
-        from rivex._bodies import coerce_body
+        from rivex.core._bodies import coerce_body
 
         out = coerce_body(b'"Mozilla/5.0 (iPhone)"', UAWrapped)
         # Just check it returns a parsed object
         assert out.is_mobile or out.is_pc or out.is_bot or out.is_tablet
         assert body_schema_extended(UAWrapped) == "custom"
     finally:
-        from rivex import _bodies as _b
+        from rivex.core import _bodies as _b
 
         _b._CUSTOM_HANDLERS.pop("user-agents", None)
         _b._CUSTOM_DETECTORS[:] = [
@@ -561,7 +561,7 @@ def test_is_body_model_for_new_backends():
     pytest.importorskip("msgspec")
     pytest.importorskip("construct")
 
-    from rivex._bodies import is_body_model
+    from rivex.core._bodies import is_body_model
 
     assert is_body_model(DCItem) is True
     assert is_body_model(AttrsItem) is True
