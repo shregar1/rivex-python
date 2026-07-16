@@ -11,10 +11,14 @@ from __future__ import annotations
 
 import http.server
 import json
+import socket
 import socketserver
+import subprocess
 import sys
 import threading
+import time
 
+import httpx
 import pytest
 
 from rivex.cli.cli import load_env_file, main
@@ -244,3 +248,123 @@ def test_health_route_skipped_when_user_owns_root(monkeypatch):
     # and there must be no duplicate of any path.
     assert ("GET", "/") not in fake.added
     assert len(fake.added) == len(set(fake.added))
+
+
+# ---------------------------------------------------------------------------
+# dev / run — exercise the subprocess path end-to-end with real HTTP traffic.
+# The original audit flagged dev/run as "help-text only" tests — exactly why
+# the duplicate-route crash shipped. These tests would have caught it.
+# ---------------------------------------------------------------------------
+
+
+def _free_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
+def _wait_for_port(port: int, timeout: float = 10.0) -> None:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            with httpx.Client(timeout=0.5) as client:
+                r = client.get(f"http://127.0.0.1:{port}/ping")
+                if r.status_code in (200, 404):
+                    return
+        except (httpx.ConnectError, httpx.ReadError, httpx.RemoteProtocolError):
+            pass
+        time.sleep(0.25)
+    raise AssertionError(f"server on port {port} did not bind within {timeout}s")
+
+
+def _terminate(proc: subprocess.Popen) -> None:
+    proc.terminate()
+    try:
+        proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.wait()
+
+
+def test_run_serves_app(cli_app):
+    """`rivex run app:app` actually binds the port and serves real traffic."""
+    port = _free_port()
+    proc = subprocess.Popen(
+        [sys.executable, "-m", "rivex.cli.cli", "run", "app:app", "--port", str(port)],
+        cwd=cli_app,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    try:
+        _wait_for_port(port)
+        with httpx.Client(timeout=2.0) as client:
+            ping = client.get(f"http://127.0.0.1:{port}/ping")
+            item = client.get(f"http://127.0.0.1:{port}/items/42")
+            missing = client.get(f"http://127.0.0.1:{port}/no/such/route")
+        assert ping.status_code == 200 and ping.json() == {"pong": True}
+        assert item.status_code == 200 and item.json() == {"id": 42}
+        assert missing.status_code == 404
+    finally:
+        _terminate(proc)
+
+
+def test_run_regression_used_to_crash_with_root_and_health(cli_app):
+    """The exact config that used to crash `rivex run` before the
+    health-route collision was fixed: GET / + GET /health + docs on.
+
+    If this regresses, any scaffolded app with a root route will not start.
+    """
+    crashapp = cli_app / "crashapp.py"
+    crashapp.write_text(
+        "from rivex import Rivex\n"
+        "app = Rivex(title='crash')\n"
+        "@app.get('/')\n"
+        "async def r(): return {'ok': True}\n"
+        "@app.get('/health')\n"
+        "async def h(): return {'h': True}\n"
+    )
+    port = _free_port()
+    proc = subprocess.Popen(
+        [sys.executable, "-m", "rivex.cli.cli", "run", "crashapp:app", "--port", str(port)],
+        cwd=cli_app,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    try:
+        _wait_for_port(port)
+        with httpx.Client(timeout=2.0) as client:
+            root = client.get(f"http://127.0.0.1:{port}/")
+            health = client.get(f"http://127.0.0.1:{port}/health")
+        assert root.status_code == 200 and root.json() == {"ok": True}
+        assert health.status_code == 200 and health.json() == {"h": True}
+    finally:
+        _terminate(proc)
+
+
+def test_dev_serves_app(cli_app):
+    """`rivex dev app:app` binds and serves. Uses --no-reload to keep
+    the test fast and deterministic; reload itself is covered by
+    uvicorn/watchfiles upstream tests, not ours."""
+    port = _free_port()
+    proc = subprocess.Popen(
+        [
+            sys.executable,
+            "-m",
+            "rivex.cli.cli",
+            "dev",
+            "app:app",
+            "--port",
+            str(port),
+            "--no-reload",
+        ],
+        cwd=cli_app,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    try:
+        _wait_for_port(port)
+        with httpx.Client(timeout=2.0) as client:
+            ping = client.get(f"http://127.0.0.1:{port}/ping")
+        assert ping.status_code == 200 and ping.json() == {"pong": True}
+    finally:
+        _terminate(proc)
