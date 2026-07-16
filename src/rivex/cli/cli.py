@@ -361,7 +361,6 @@ def _run_management(mgmt_args: list[str]) -> None:
             print(f"  {name}")
         return
 
-    import sys as _sys
     cmd.run_from_argv(["rivex", cmd_name] + mgmt_args[1:])
 
 

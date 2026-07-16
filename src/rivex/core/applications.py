@@ -421,9 +421,9 @@ class Rivex:
         streams each event as a separate chunk over the HTTP connection
         with ``Content-Type: text/event-stream``.
         """
+
         from rivex.core.responses import EventSourceResponse
         from rivex.core.routing import RouteRecord
-        from functools import wraps
 
         def _coerce_sse(gen: Any) -> Any:
             """Wrap a generator so ``SseEvent`` objects are
@@ -708,7 +708,7 @@ class Rivex:
         trusted_hosts: list[str] | None = None,
         xss: dict[str, Any] | None = None,
         max_body_size: int | None = None,
-    ) -> "Rivex":
+    ) -> Rivex:
         """Fluent builder for Tier 1 security config. Returns ``self``
         for chaining. Pass any subset of protections; omitted
         protections keep their previous value (or stay disabled
@@ -749,13 +749,19 @@ class Rivex:
         # observability classes below are ALSO recognised here and
         # the kwargs are forwarded to the Rust engine so the
         # const-router fast path benefits too.
+        from rivex.middleware.middleware_auth import JWTAuthMiddleware as _JwtMW
         from rivex.middleware.middleware_observability import (
-            PrometheusMetricsMiddleware as _PromMW,
-            TracingMiddleware as _TraceMW,
-            JsonLoggingMiddleware as _JsonMW,
             HealthCheckMiddleware as _HealthMW,
         )
-        from rivex.middleware.middleware_auth import JWTAuthMiddleware as _JwtMW
+        from rivex.middleware.middleware_observability import (
+            JsonLoggingMiddleware as _JsonMW,
+        )
+        from rivex.middleware.middleware_observability import (
+            PrometheusMetricsMiddleware as _PromMW,
+        )
+        from rivex.middleware.middleware_observability import (
+            TracingMiddleware as _TraceMW,
+        )
         if middleware_cls is _PromMW:
             self._server.set_metrics(**kwargs)
             self._sync_server.set_metrics(**kwargs)
