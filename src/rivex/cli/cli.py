@@ -33,6 +33,11 @@ def main(argv: list[str] | None = None) -> None:
         "--no-reload", action="store_true", help="Disable autoreload (debug-only)"
     )
     dev_parser.add_argument("--log-level", default="info", help="uvicorn log level (default: info)")
+    dev_parser.add_argument(
+        "--env-file",
+        default=".env",
+        help="Environment file to load before serving (default: .env).",
+    )
 
     # `rivex run main:app` — production-style serve on uvicorn.
     # No autoreload by default; pass --reload for the dev path
@@ -85,10 +90,44 @@ def main(argv: list[str] | None = None) -> None:
         help="Production preset: bumps workers to 2*CPU+1 and "
         "log-level to WARNING. Same idea as Robyn's ``--fast``.",
     )
+    run_parser.add_argument(
+        "--env-file",
+        default=".env",
+        help="Environment file to load before serving (default: .env).",
+    )
 
     # rivex routes
     routes_parser = sub.add_parser("routes", help="List registered routes")
     routes_parser.add_argument("app", help="App import path (e.g. main:app)")
+    routes_parser.add_argument(
+        "--format",
+        choices=["table", "json"],
+        default="table",
+        help="Output format (default: table).",
+    )
+
+    # rivex openapi — export the app's OpenAPI spec as JSON. Uses the
+    # in-process ``rivex.openapi.generate_openapi`` generator so the
+    # output matches what the server serves at /openapi.json exactly.
+    openapi_parser = sub.add_parser("openapi", help="Export the OpenAPI spec as JSON")
+    openapi_parser.add_argument("app", help="App import path (e.g. main:app)")
+    openapi_parser.add_argument(
+        "-o", "--output", help="Write the spec to this file (default: stdout)"
+    )
+    openapi_parser.add_argument(
+        "--indent", type=int, default=2, help="JSON indentation level (default: 2)"
+    )
+
+    # rivex bench — stdlib HTTP load generator. No extra deps.
+    bench_parser = sub.add_parser("bench", help="Run an HTTP benchmark against a URL")
+    bench_parser.add_argument("url", help="URL to benchmark")
+    bench_parser.add_argument(
+        "-n", "--requests", dest="num_requests", type=int, default=100, help="Total requests"
+    )
+    bench_parser.add_argument(
+        "-c", "--concurrency", type=int, default=10, help="Concurrent connections"
+    )
+    bench_parser.add_argument("--method", default="GET", help="HTTP method")
 
     # rivex version
     sub.add_parser("version", help="Show Rivex version")
@@ -219,6 +258,7 @@ def main(argv: list[str] | None = None) -> None:
     elif args.command == "dev":
         _run_dev(args)
     elif args.command == "run":
+        load_env_file(args.env_file)
         app = _import_app(args.app)
         # Resolve --mode in the face of legacy --sync / --asgi overrides.
         # The legacy flags win for back-compat: a long-standing user
@@ -260,7 +300,14 @@ def main(argv: list[str] | None = None) -> None:
             raise SystemExit(f"unknown mode: {mode!r}")
     elif args.command == "routes":
         app = _import_app(args.app)
-        _print_routes(app)
+        _print_routes(app, fmt=args.format)
+    elif args.command == "openapi":
+        app = _import_app(args.app)
+        _export_openapi(app, output=args.output, indent=args.indent)
+    elif args.command == "bench":
+        from rivex.cli.bench import run_bench
+
+        run_bench(args.url, args.num_requests, args.concurrency, args.method)
     elif args.command == "version":
         from rivex import __version__
 
@@ -318,10 +365,27 @@ def _run_management(mgmt_args: list[str]) -> None:
     cmd.run_from_argv(["rivex", cmd_name] + mgmt_args[1:])
 
 
-def _print_routes(app) -> None:
+def _print_routes(app, *, fmt: str = "table") -> None:
     routes = getattr(app, "_routes", [])
     if not routes:
         print("No routes registered.")
+        return
+
+    if fmt == "json":
+        import json
+
+        data = [
+            {
+                "method": r.method,
+                "path": r.path,
+                "name": r.endpoint.__name__ if hasattr(r.endpoint, "__name__") else str(r.endpoint),
+                "status_code": r.status_code,
+                "tags": r.tags,
+                "deprecated": r.deprecated,
+            }
+            for r in routes
+        ]
+        print(json.dumps(data, indent=2))
         return
 
     method_w = max(len(r.method) for r in routes)
@@ -333,6 +397,64 @@ def _print_routes(app) -> None:
         name = r.endpoint.__name__ if hasattr(r.endpoint, "__name__") else str(r.endpoint)
         tags = f" [{', '.join(r.tags)}]" if r.tags else ""
         print(f"{r.method:<{method_w}}  {r.path:<{path_w}}  {name}{tags}")
+
+
+def _export_openapi(app, *, output: str | None, indent: int) -> None:
+    """`rivex openapi` — emit the app's OpenAPI 3.1 spec as JSON.
+
+    Uses :func:`rivex.openapi.generate_openapi` so the output is identical
+    to what the running server serves at ``/openapi.json``.
+    """
+    import json
+
+    from rivex.openapi import generate_openapi
+
+    spec = generate_openapi(
+        title=app.title,
+        version=app.version,
+        description=getattr(app, "description", None),
+        routes=getattr(app, "_routes", []),
+    )
+    spec_json = json.dumps(spec, indent=indent)
+
+    if output:
+        with open(output, "w") as f:
+            f.write(spec_json)
+            f.write("\n")
+        print(f"  OpenAPI spec written to {output}")
+    else:
+        print(spec_json)
+
+
+def load_env_file(path: str) -> int:
+    """Load ``KEY=VALUE`` pairs from *path* into :data:`os.environ`.
+
+    Returns the number of variables loaded. Missing files are a no-op
+    (returns 0). Existing environment variables are NOT overwritten
+    (``os.environ.setdefault``), matching the precedence of a real shell.
+    Quoted values are unwrapped; unquoted values get trailing
+    `` # comment`` stripped.
+    """
+    import os
+
+    if not os.path.isfile(path):
+        return 0
+    loaded = 0
+    with open(path) as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, value = line.partition("=")
+            key = key.strip()
+            value = value.strip()
+            if len(value) >= 2 and value[0] == value[-1] and value[0] in ('"', "'"):
+                value = value[1:-1]
+            elif " #" in value:
+                value = value[: value.index(" #")].rstrip()
+            os.environ.setdefault(key, value)
+            loaded += 1
+    return loaded
 
 
 def _run_with_reload(app_path: str, host: str, port: int) -> None:
@@ -455,6 +577,7 @@ def _run_dev(args: argparse.Namespace) -> None:
     uvicorn as a string, let it import the app fresh on every reload,
     and watch the directories for file changes.
     """
+    load_env_file(getattr(args, "env_file", ".env"))
     import uvicorn
 
     if args.no_reload:

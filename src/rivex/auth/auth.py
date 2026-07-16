@@ -41,8 +41,11 @@ import functools
 import hashlib
 import hmac
 import json
+import time
 from typing import Any, Awaitable, Callable, TypeVar
 
+from rivex.core._compat import HAS_CORE
+from rivex.core._compat import rc as _rc
 from rivex.core.context import bind_user, request_context
 from rivex.core.exceptions import HTTPException
 from rivex.core.requests import Request
@@ -314,6 +317,18 @@ def jwt_required(
     """
 
     def _verify(token: str) -> dict[str, Any] | None:
+        alg = algorithm.upper()
+        if HAS_CORE and alg in ("HS256", "HS384", "HS512"):
+            try:
+                payload_str: str = _rc.jwt_decode_alg(token, secret or "", alg, True)
+            except (ValueError, TypeError):
+                return None
+            decoded: dict[str, Any] = json.loads(payload_str)
+            exp = decoded.get("exp")
+            if exp is not None and time.time() > exp:
+                return None
+            return decoded
+
         payload = _decode_jwt_payload(token)
         if payload is None:
             return None
@@ -337,10 +352,8 @@ def jwt_required(
             actual = _b64_decode(parts[2])
             if not hmac.compare_digest(expected[:sig_size], actual):
                 return None
-
         exp = payload.get("exp")
         if exp is not None:
-            import time
             if time.time() > exp:
                 return None
 

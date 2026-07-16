@@ -1626,7 +1626,7 @@ class Rivex:
             if registered_paths is not None and self.redoc_url:
                 registered_paths.add(self.redoc_url)
 
-        if self.health_url:
+        if self.health_url and self.health_url not in (registered_paths or ()):
             health_bytes = build_health_html(
                 self.title,
                 self.version,
