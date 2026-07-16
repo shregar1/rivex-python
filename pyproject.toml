@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "rivex-py"
-version = "0.2.4"
+version = "0.2.5"
 description = "A Rust-powered Python web framework with FastAPI-like ergonomics"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -160,7 +160,7 @@ manifest-path = "../core.rivex.vexarr.com/crates/rivex-python/Cargo.toml"
 module-name = "rivex.rivex_core"
 python-source = "src"
 features = ["pyo3/extension-module"]
-include = ["src/rivex_core.py"]
+include = ["src/rivex_core.py", "src/rivex_core.pyi"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "strict"
@@ -197,6 +197,7 @@ extend-immutable-calls = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["B008"]
+"src/rivex_core.pyi" = ["F401", "F403"]
 
 [tool.ruff.format]
 quote-style = "double"
@@ -206,13 +207,15 @@ python_version = "3.10"
 warn_return_any = true
 warn_unused_configs = true
 ignore_missing_imports = true
-# ``rivex_core`` is the Rust extension compiled by maturin. The stub
-# at ``stubs/rivex_core/__init__.pyi`` is the type description of the
-# top-level ``rivex_core`` module that the wrappers in
-# ``src/rivex/_rust.py`` (and a few other call sites) import. Without
-# this, mypy sees only the installed stub (which may pre-date the
-# current Rust API) and reports spurious ``has no attribute`` errors.
-mypy_path = "stubs"
+# ``rivex_core`` is the Rust extension compiled by maturin. The top-level
+# ``rivex_core`` name is a runtime shim (``src/rivex_core.py``) that loads
+# the compiled ``rivex.rivex_core`` extension dynamically via ``importlib``;
+# mypy cannot introspect that, so the sibling ``src/rivex_core.pyi`` stub
+# (preferred over the ``.py``) gives it a typed view of the module. The
+# stub re-exports the comprehensive declarations in
+# ``src/rivex/rivex_core.pyi``. Without it, every ``import rivex_core``
+# call site (``src/rivex/_rust.py``, ``src/rivex/auth/*``, …) reports
+# spurious ``has no attribute`` errors.
 exclude = [
     # The scaffold template is a sample project users will copy and
     # edit; it isn't part of the framework's runtime and uses
