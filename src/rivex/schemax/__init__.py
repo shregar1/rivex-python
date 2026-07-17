@@ -42,7 +42,9 @@ if _AVAILABLE:
 else:
 
     def __getattr__(name):  # pragma: no cover
-        raise ImportError(
-            "rivex.schemax requires the `schemax` package to be installed. "
-            f"Install it with `pip install schemax`. (original error: {_ERR})"
+        raise AttributeError(
+            f"module 'rivex.schemax' has no attribute {name!r}; "
+            f"the upstream schemax.idl package is no longer shipped. "
+            f"Install it with `pip install schemax` "
+            f"(original error: {_ERR})"
         )

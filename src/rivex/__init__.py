@@ -1,4 +1,3 @@
-from rivex import schemax
 from rivex._rust import (
     format_iban,
     hash_argon2,

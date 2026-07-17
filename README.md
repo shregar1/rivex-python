@@ -29,34 +29,14 @@ app.run(host="0.0.0.0", port=8000)   # interactive docs at /docs
 
 ## Benchmarks
 
-Cross-language world-bench on Azure D4s_v5 (4 vCPU, 16 GB) against 12 frameworks using `wrk` 4.2.0.
+Cross-language world-bench on Azure D4s_v5 (4 vCPU, 16 GB) against Python web frameworks using `wrk` 4.2.0.
 
 | Framework | Language | RPS (plaintext) | RPS (JSON) |
 | --- | --- | --- | --- |
-| libreactor | C | 336,607 | 331,253 |
-| httpbeast | Nim | 269,484 | 269,344 |
-| lwan | C | 262,286 | 259,092 |
-| ohkami | Rust | 261,254 | 254,745 |
-| h2o | C | 258,581 | 259,340 |
-| hyper | Rust | 233,844 | 236,424 |
 | **Rivex** | **Python** | **233,744** | **234,614** |
-| warp | Rust | 228,801 | 229,339 |
-| fasthttp | Go | 213,744 | 214,418 |
-| axum | Rust | 210,534 | 213,871 |
-| drogon | C++ | 210,960 | 209,916 |
-| fiber | Go | 205,629 | 210,647 |
-| salvo | Rust | 184,222 | 188,001 |
-| echo | Go | 128,179 | 128,823 |
-| gin | Go | 127,527 | 127,192 |
-| go-nethttp | Go | 126,596 | 125,964 |
-| actix-web | Rust | 119,262 | 123,192 |
 | Robyn | Python | 127,892 | 119,880 |
-| kemal | Crystal | 76,020 | 77,956 |
-| bun | JavaScript | 70,386 | 70,082 |
 | starlette | Python | 49,225 | 48,747 |
 | sanic | Python | 46,684 | 50,440 |
-| phoenix | Elixir | 39,011 | 39,390 |
-| prologue | Nim | 95,962 | 0 |
 | fastapi | Python | 13,078 | 12,649 |
 
 All results at 256 concurrent connections. p99 latency stays under 4ms for Rivex.
