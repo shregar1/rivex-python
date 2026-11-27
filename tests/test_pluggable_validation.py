@@ -308,7 +308,7 @@ def test_model_validator_before_runs_on_raw_input() -> None:
 def test_schema_appears_in_openapi_spec() -> None:
     """A Schema used as a body type shows up in the OpenAPI /docs spec."""
     from rivex.openapi.openapi import generate_openapi
-    from rivex.core.routing import RouteRecord
+    from rivex.web.routing import RouteRecord
 
     async def create(user: _CreateUser):  # pragma: no cover — schema-only
         return user

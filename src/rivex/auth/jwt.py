@@ -3,10 +3,10 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from rivex.core._compat import HAS_CORE
-from rivex.core._compat import rc as _rc
-from rivex.core.exceptions import HTTPException
-from rivex.core.requests import Request
+from rivex.native._compat import HAS_CORE
+from rivex.native._compat import rc as _rc
+from rivex.exceptions.http.exceptions import HTTPException
+from rivex.http.requests import Request
 
 
 class JWTError(Exception):
@@ -32,6 +32,30 @@ def encode(
     algorithm: str = "HS256",
     expires_in: int | None = None,
 ) -> str:
+    """Sign ``payload`` as an HS256 JWT and return the encoded string.
+
+    Prefers the Rust core encoder when available; falls back to a
+    pure-Python HMAC-SHA256 implementation otherwise. ``expires_in`` is
+    interpreted as seconds-from-now and written into the ``exp`` claim
+    before signing (when supplied). The pure-Python path also encodes
+    the ``exp`` claim.
+
+    Args:
+        payload: Claims to embed in the token. Copied before mutation
+            so the caller's dict is not modified.
+        secret: HMAC secret used to sign the token.
+        algorithm: JWT algorithm. Only ``"HS256"`` is supported.
+        expires_in: Optional lifetime in seconds; ``exp`` is set to
+            ``now + expires_in`` before signing.
+
+    Returns:
+        The encoded ``header.payload.signature`` JWT string.
+
+    Raises:
+        JWTError: When ``algorithm`` is anything other than ``"HS256"``.
+        InvalidTokenError: When the Rust encoder raises (rare;
+            usually indicates a malformed payload).
+    """
     if algorithm != "HS256":
         raise JWTError(f"Unsupported algorithm: {algorithm}")
 
@@ -60,9 +84,11 @@ def encode(
         payload["exp"] = int(time.time()) + expires_in
 
     def _b64(data: str) -> str:
+        """Base64-url-encode a string with ``=`` padding stripped."""
         return base64.urlsafe_b64encode(data.encode()).rstrip(b"=").decode()
 
     def _b64b(data: bytes) -> str:
+        """Base64-url-encode bytes with ``=`` padding stripped."""
         return base64.urlsafe_b64encode(data).rstrip(b"=").decode()
 
     segs = [
@@ -81,6 +107,30 @@ def decode(
     *,
     verify: bool = True,
 ) -> dict[str, Any]:
+    """Decode (and optionally verify) a JWT and return its claims.
+
+    Prefers the Rust core decoder when available; falls back to a
+    pure-Python HMAC-SHA256 implementation. The pure-Python path
+    validates the three-segment structure, recomputes the signature
+    when ``verify`` is true, and enforces the ``exp`` claim.
+
+    Args:
+        token: The ``header.payload.signature`` JWT string.
+        secret: HMAC secret used to verify the signature (ignored when
+            ``verify`` is false).
+        verify: When ``True`` (default) the signature and ``exp`` claim
+            are checked. When ``False`` only the structure is parsed.
+
+    Returns:
+        The decoded claims dict.
+
+    Raises:
+        InvalidTokenError: When the token is malformed, has the wrong
+            number of segments, fails signature verification, or has a
+            non-JSON payload.
+        ExpiredTokenError: When ``exp`` is present and has elapsed
+            (``verify`` only).
+    """
     if HAS_CORE:
         try:
             payload_str: str = _rc.jwt_decode(token, secret, verify)

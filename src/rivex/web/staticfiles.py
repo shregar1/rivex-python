@@ -3,9 +3,9 @@ from __future__ import annotations
 import os
 import re
 
-from rivex.core._compat import HAS_CORE, json_error_response
-from rivex.core._compat import rc as _rc
-from rivex.core.responses import FileResponse
+from rivex.native._compat import HAS_CORE, json_error_response
+from rivex.native._compat import rc as _rc
+from rivex.http.responses import FileResponse
 
 
 def _file_etag(path: str, stat_result: os.stat_result | None = None) -> str:
@@ -105,6 +105,20 @@ class StaticFiles:
         headers = request_data.get("headers") or []
 
         def _header_value(name: str) -> str | None:
+            """Return the first ``headers`` entry whose name matches ``name`` (case-insensitive).
+
+            The captured ``headers`` is a list of ``(name, value)``
+            tuples — not a dict — so this helper does a linear scan
+            with case-folded name comparison. The first match wins;
+            later duplicates are ignored.
+
+            Args:
+                name: Header name to look up, in any case.
+
+            Returns:
+                The first matching header value, or ``None`` when no
+                header with that name is present.
+            """
             for k, v in headers:
                 if k.lower() == name:
                     return v
@@ -197,10 +211,32 @@ class StaticFiles:
 
 
 def _guess_mime(path: str) -> str:
+    """Best-effort MIME type for ``path`` based on its file extension.
+
+    Thin wrapper around :func:`mimetypes.guess_type` that falls back to
+    ``"application/octet-stream"`` when no type can be inferred — the
+    common case being extension-less or unknown extension files served
+    as raw bytes.
+
+    Args:
+        path: Path or filename; only the extension is consulted.
+
+    Returns:
+        A MIME type string. Never empty.
+    """
     import mimetypes
     mime, _ = mimetypes.guess_type(path)
     return mime or "application/octet-stream"
 
 
 def _not_found() -> dict:
+    """Build the standard 404 response dict used by the static-file handler.
+
+    Delegates to :func:`json_error_response` so the wire format stays
+    consistent with the rest of the framework.
+
+    Returns:
+        A response dict with ``status`` 404, a JSON body describing
+        the error, and the usual error headers.
+    """
     return json_error_response(404, "Not Found")

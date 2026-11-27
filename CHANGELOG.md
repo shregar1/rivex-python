@@ -9,6 +9,7 @@ This project follows [Semantic Versioning](https://semver.org/).
 ## [0.2.3] - 2026-07-10
 
 ### Fixed
+
 - **Boot crash for CORS-enabled apps: `TypeError: argument 'host':
   'NoneType' object cannot be converted to 'PyString'`.** In 0.2.2 the
   CORS-preflight registration loop in
@@ -49,6 +50,7 @@ This project follows [Semantic Versioning](https://semver.org/).
   with a 500.
 
 ### Added
+
 - **`rivex.context.RequestContextMiddleware`** — populate a
   `contextvars.ContextVar` with the request's `method`, `path`, `ip`,
   `user_agent`, and `request_id` so deep callers (audit / usage /
@@ -107,6 +109,7 @@ This project follows [Semantic Versioning](https://semver.org/).
   tests (157 Rust + 239 Python), 0 failures.
 
 ### Added
+
 - **`RivexAsyncServer` (mode `async` / `auto`)** — the bundled Rust
   `hyper+Tokio` engine is now the default and is exposed as
   `app.run_async()`. It supports HTTP/1.1 + HTTP/2 with auto-negotiation,
@@ -146,6 +149,7 @@ This project follows [Semantic Versioning](https://semver.org/).
   JSON, path parameter, const route).
 
 ### Performance
+
 - **Release profile tuned** — workspace `[profile.release]` now sets
   `lto = "fat"`, `codegen-units = 1`, `panic = "abort"`, `strip = "symbols"`,
   and `opt-level = 3` (mirrors the recipe Robyn uses). Plus a
@@ -209,7 +213,8 @@ the async engine (72µs vs 2.4 ms at p99) — pick async for raw RPS,
 sync for tail-latency-sensitive APIs.
 
 ### Fixed
-- `RivexResponse` is now `#[derive(Clone)]` so it can live in the
+
+- `Response` is now `#[derive(Clone)]` so it can live in the
   const-route cache without re-allocating.
 - `_run_uvicorn_workers` had a pre-existing `registered_paths.add("/")`
   reference to a variable that didn't exist in the function scope —
@@ -223,6 +228,7 @@ sync for tail-latency-sensitive APIs.
   Python module so users can opt in via their own middleware.
 
 ### Tests
+
 - `tests/test_modes_and_const.py` — 8 new tests covering `run(mode=…)`
   routing, `add_const_route` validation, and live end-to-end checks
   that both engines serve the same route table identically.
@@ -230,6 +236,7 @@ sync for tail-latency-sensitive APIs.
 ## [0.2.0] - 2026-06-16
 
 ### Added
+
 - **Plugin architecture** — third-party packages can now register
   themselves through Python entry points under
   ``rivex.plugins.{admin,codegen,scaffold}``.  The base ``Plugin``
@@ -265,6 +272,7 @@ sync for tail-latency-sensitive APIs.
   separate ``rivex-core`` package to install.
 
 ### Changed
+
 - **Bumped to 0.2.0** because the plugin entry-point and singleton
   scope additions are additive but observable — a 0.1.x application
   that happened to register a class named ``Plugin`` in
@@ -286,6 +294,7 @@ sync for tail-latency-sensitive APIs.
   ``schemax`` package.
 
 ### Fixed
+
 - `_injection.py`: undefined name `_singleton_cache` introduced when
   singleton-scope support was added.
 - `rivex/__init__.py`: F401 lint noise on the re-exported
@@ -309,6 +318,7 @@ sync for tail-latency-sensitive APIs.
   function definition.
 
 ### Production readiness
+
 - **`mypy_path = "stubs"`** in ``pyproject.toml`` plus a
   ``stubs/rivex_core/__init__.pyi`` shim so mypy can resolve the
   ``rivex_core`` top-level module against the bundled
@@ -374,6 +384,7 @@ sync for tail-latency-sensitive APIs.
 ## [0.1.0] - 2025-05-10
 
 ### Added
+
 - Initial release
 - `Rivex` application class with FastAPI-compatible decorator API
 - `Router` for route grouping with prefix and tag support

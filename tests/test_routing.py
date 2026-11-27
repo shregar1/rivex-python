@@ -1,4 +1,4 @@
-from rivex.core.routing import Controller, Router, RouteRecord, get, post, route
+from rivex.web.routing import Controller, Router, RouteRecord, get, post, route
 
 
 def test_router_creates_records():

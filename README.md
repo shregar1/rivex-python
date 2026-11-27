@@ -24,7 +24,7 @@ app.run(host="0.0.0.0", port=8000)   # interactive docs at /docs
 - **Familiar API** — decorator routes, `Depends()` injection, Pydantic models, auto-generated OpenAPI. The app class is also exported as `FastAPI` for drop-in muscle memory.
 - **Rust core, not an ASGI shim** — the server, request parsing, JSON encoding, password hashing, JWT, and validators all run in Rust. You opt into the fast paths without leaving Python.
 - **Batteries included** — 20+ production middleware, security schemes, JWT auth, guards, throttling, WebSockets, background tasks, caching, pagination, metrics, tracing, structured logging, health checks, and a monitoring dashboard.
-- **Two validation engines** — Pydantic `BaseModel` or Rivex's lighter `Schema`. Interchangeable at the handler boundary.
+- **Two validation engines** — Pydantic `BaseModel` or  lighter `Schema`. Interchangeable at the handler boundary.
 - **Native JSON generation** — `rivex.gen` builds large JSON payloads entirely in Rust with no intermediate Python objects, for throughput plain list comprehensions can't match.
 
 ## Benchmarks
@@ -59,7 +59,6 @@ pip install rivex
 Optional extras:
 
 ```bash
-pip install "rivex[schemax]"   # Schemax IDL toolchain
 pip install "rivex[dev]"       # pytest, httpx, mypy, ruff
 pip install "rivex[admin]"     # admin dashboard
 pip install "rivex[all]"       # everything

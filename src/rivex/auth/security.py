@@ -4,10 +4,10 @@ import base64
 from dataclasses import dataclass
 from typing import Any
 
-from rivex.core._compat import HAS_CORE
-from rivex.core._compat import rc as _rc
-from rivex.core.exceptions import HTTPException
-from rivex.core.requests import Request
+from rivex.native._compat import HAS_CORE
+from rivex.native._compat import rc as _rc
+from rivex.exceptions.http.exceptions import HTTPException
+from rivex.http.requests import Request
 
 
 class APIKeyHeader:
@@ -262,6 +262,21 @@ class OAuth2PasswordRequestForm:
 
     @classmethod
     def _from_request(cls, request: Request) -> OAuth2PasswordRequestForm:
+        """Build an instance from an ``application/x-www-form-urlencoded`` body.
+
+        Parses the form body (or accepts an empty form when no body is
+        present) and maps the standard OAuth2 password-grant fields onto
+        the dataclass fields, defaulting ``grant_type`` to ``"password"``
+        and converting empty strings on optional fields to ``None``.
+
+        Args:
+            request: The inbound request whose ``body`` carries the
+                form-encoded grant parameters.
+
+        Returns:
+            A populated :class:`OAuth2PasswordRequestForm` ready for
+            authentication.
+        """
         from urllib.parse import parse_qs
 
         body = request.body
@@ -271,6 +286,7 @@ class OAuth2PasswordRequestForm:
             params = {}
 
         def _first(key: str, default: str = "") -> str:
+            """Return the first value for ``key`` in the parsed form, or ``default``."""
             vals = params.get(key, [])
             return vals[0] if vals else default
 

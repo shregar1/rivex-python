@@ -4,8 +4,8 @@ import json
 from collections.abc import Callable
 from typing import Any
 
-from rivex.core._compat import HAS_CORE, parse_request_cookies
-from rivex.core._compat import rc as _rc
+from rivex.native._compat import HAS_CORE, parse_request_cookies
+from rivex.native._compat import rc as _rc
 from rivex.middleware.middleware import Middleware
 
 
@@ -31,6 +31,30 @@ class SessionMiddleware(Middleware):
         self.domain = domain
 
     async def process(self, request_data: dict, call_next: Callable) -> dict:
+        """Run the middleware chain with cookie-based session support.
+
+        Loads the existing session from the request cookies (when valid),
+        attaches it as a mutable copy on ``request_data["session"]`` so
+        handlers can read and mutate it, then forwards the request to
+        ``call_next``. After the downstream response is collected, the
+        middleware compares the post-handler session to the pre-handler
+        snapshot and, when they differ, signs the new session payload
+        and appends a ``Set-Cookie`` header (with the configured path,
+        max-age, SameSite, Secure, HTTPOnly, and domain attributes) to
+        the response. When the post-handler session is empty but a
+        session was loaded originally, an expiry ``Set-Cookie`` is
+        emitted so the cookie is cleared in the browser.
+
+        Args:
+            request_data: The in-flight request envelope. The session
+                cookie is read from here and ``session_data`` is added.
+            call_next: Awaitable that invokes the next middleware or
+            handler and returns the downstream response dict.
+
+        Returns:
+            The downstream response dict, possibly with a ``Set-Cookie``
+            header appended for the session payload or expiry.
+        """
         session_data = self._load_session(request_data)
         request_data = dict(request_data)
         request_data["session"] = session_data
@@ -47,7 +71,7 @@ class SessionMiddleware(Middleware):
             parts.append(f"SameSite={self.same_site}")
             if self.https_only:
                 parts.append("Secure")
-            parts.append("HttpOnly")
+            parts.append("HTTPOnly")
             if self.domain:
                 parts.append(f"Domain={self.domain}")
             if isinstance(response, dict):
@@ -67,6 +91,22 @@ class SessionMiddleware(Middleware):
         return response
 
     def _load_session(self, request_data: dict) -> dict[str, Any]:
+        """Extract and verify the session payload from the request cookies.
+
+        Pulls the cookie map off the request envelope, finds the
+        configured session cookie, runs :meth:`_verify` on its value,
+        and JSON-decodes the resulting bytes. Returns an empty dict
+        when the cookie is missing, malformed, fails verification, or
+        does not decode as JSON.
+
+        Args:
+            request_data: The in-flight request envelope. The cookies
+                are read via :func:`parse_request_cookies`.
+
+        Returns:
+            The decoded session dict, or an empty dict when no valid
+            session could be reconstructed.
+    """
         cookies = parse_request_cookies(request_data)
         token = cookies.get(self.session_cookie)
         if token:
@@ -80,6 +120,21 @@ class SessionMiddleware(Middleware):
         return {}
 
     def _sign(self, data: bytes) -> str:
+        """Sign ``data`` and return a base64-and-HMAC token.
+
+        Prefers the Rust core's ``session_sign`` helper when the native
+        extension is available. Otherwise falls back to a portable
+        ``base64(data).hex-hmac-sha256`` scheme using
+        ``self.secret_key``.
+
+        Args:
+            data: The session payload bytes to sign.
+
+        Returns:
+            A token string combining the encoded payload and signature.
+            The exact format depends on whether the Rust core is
+            available.
+        """
         if HAS_CORE:
             result: str = _rc.session_sign(data, self.secret_key)
             return result
@@ -92,6 +147,23 @@ class SessionMiddleware(Middleware):
         return f"{encoded}.{sig}"
 
     def _verify(self, token: str) -> bytes | None:
+        """Verify a session token, returning the original payload bytes.
+
+        Prefers the Rust core's ``session_verify`` when available;
+        otherwise performs an HMAC-SHA256 constant-time comparison
+        against the trailing signature and base64-decodes the leading
+        payload. Returns ``None`` for tokens that lack the ``.``
+        separator, are not valid base64, or whose signature does not
+        match.
+
+        Args:
+            token: The cookie value to verify, in the format produced
+                by :meth:`_sign`.
+
+        Returns:
+            The original payload bytes when verification succeeds, or
+            ``None`` otherwise.
+        """
         if HAS_CORE:
             result: bytes | None = _rc.session_verify(token, self.secret_key)
             return result

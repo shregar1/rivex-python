@@ -286,12 +286,22 @@ def _terminate(proc: subprocess.Popen) -> None:
         proc.wait()
 
 
+def _env() -> dict[str, str]:
+    import os
+    from pathlib import Path
+    env = dict(os.environ)
+    src_dir = str(Path(__file__).parent.parent / "src")
+    env["PYTHONPATH"] = f"{src_dir}:{env.get('PYTHONPATH', '')}" if "PYTHONPATH" in env else src_dir
+    return env
+
+
 def test_run_serves_app(cli_app):
     """`rivex run app:app` actually binds the port and serves real traffic."""
     port = _free_port()
     proc = subprocess.Popen(
         [sys.executable, "-m", "rivex.cli.cli", "run", "app:app", "--port", str(port)],
         cwd=cli_app,
+        env=_env(),
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
@@ -327,6 +337,7 @@ def test_run_regression_used_to_crash_with_root_and_health(cli_app):
     proc = subprocess.Popen(
         [sys.executable, "-m", "rivex.cli.cli", "run", "crashapp:app", "--port", str(port)],
         cwd=cli_app,
+        env=_env(),
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
@@ -358,6 +369,7 @@ def test_dev_serves_app(cli_app):
             "--no-reload",
         ],
         cwd=cli_app,
+        env=_env(),
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )

@@ -6,7 +6,7 @@ import logging
 import pytest
 
 from rivex import Rivex, TestClient
-from rivex.events import Signal
+from rivex.lifecycle.events import Signal
 from rivex.auth.guards import AllowAll, DenyAll, GuardMiddleware, IsAuthenticated, RequiresRoles
 from rivex.observability.health import HealthCheck
 from rivex.middleware.middleware import (
@@ -15,7 +15,7 @@ from rivex.middleware.middleware import (
     IPFilterMiddleware,
     TimeoutMiddleware,
 )
-from rivex.problem import (
+from rivex.exceptions.problem import (
     ProblemDetail,
     ProblemException,
     ProblemResponse,
@@ -332,7 +332,7 @@ def test_allow_all_guard():
 
 
 def test_deny_all_guard():
-    from rivex.core.exceptions import HTTPException
+    from rivex.exceptions.http.exceptions import HTTPException
 
     g = DenyAll()
     with pytest.raises(HTTPException):
@@ -424,7 +424,7 @@ def test_problem_exception_handler():
 
 
 def test_problem_convenience_factories():
-    from rivex.problem import (
+    from rivex.exceptions.problem import (
         bad_request,
         conflict,
         forbidden,
@@ -487,7 +487,7 @@ def test_signal_sender_filter():
 
 
 def test_predefined_signals():
-    from rivex.events import (
+    from rivex.lifecycle.events import (
         request_started,
         server_shutdown,
     )
@@ -695,8 +695,8 @@ def test_scoped_middleware():
 
 def test_scoped_exception_handler():
     from rivex import Router
-    from rivex.core.exceptions import HTTPException
-    from rivex.core.responses import JSONResponse
+    from rivex.exceptions.http.exceptions import HTTPException
+    from rivex.http.responses import JSONResponse
 
     app = Rivex()
     router = Router(prefix="/api")
@@ -720,7 +720,7 @@ def test_scoped_exception_handler():
 
 
 def test_redirect_default_307():
-    from rivex.core.responses import RedirectResponse
+    from rivex.http.responses import RedirectResponse
 
     r = RedirectResponse("/new")
     raw = r._to_raw()
@@ -728,7 +728,7 @@ def test_redirect_default_307():
 
 
 def test_redirect_301():
-    from rivex.core.responses import RedirectResponse
+    from rivex.http.responses import RedirectResponse
 
     r = RedirectResponse("/new", status_code=301)
     raw = r._to_raw()
@@ -736,7 +736,7 @@ def test_redirect_301():
 
 
 def test_redirect_302():
-    from rivex.core.responses import RedirectResponse
+    from rivex.http.responses import RedirectResponse
 
     r = RedirectResponse("/new", status_code=302)
     raw = r._to_raw()

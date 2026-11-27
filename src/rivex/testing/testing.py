@@ -7,8 +7,8 @@ from typing import Any
 from urllib.parse import urlencode, urlsplit
 
 import rivex_core
-from rivex.core._injection import build_handler_wrapper
-from rivex.core.applications import _run_coroutine_sync
+from rivex.di._injection import build_handler_wrapper
+from rivex.applications.applications import _run_coroutine_sync
 
 
 @dataclass
@@ -19,9 +19,20 @@ class TestResponse:
 
     @property
     def text(self) -> str:
+        """Decode the response body as UTF-8 text.
+
+        Returns:
+            The response ``content`` decoded with the UTF-8 codec.
+        """
         return self.content.decode("utf-8")
 
     def json(self) -> Any:
+        """Parse the response body as JSON.
+
+        Returns:
+            The decoded JSON value — typically a ``dict`` or
+            ``list``, depending on the endpoint.
+        """
         return json.loads(self.content)
 
 
@@ -46,21 +57,97 @@ class TestClient:
         self._lifespan_state = None
 
     def get(self, url: str, **kwargs: Any) -> TestResponse:
+        """Issue a ``GET`` request against *url*.
+
+        Thin convenience wrapper over :meth:`request`; see that
+        method for the full set of supported keyword arguments.
+
+        Args:
+            url: The path (and optional query string) to request.
+            **kwargs: Forwarded verbatim to :meth:`request`.
+
+        Returns:
+            The :class:`TestResponse` produced by the application.
+        """
         return self.request("GET", url, **kwargs)
 
     def post(self, url: str, **kwargs: Any) -> TestResponse:
+        """Issue a ``POST`` request against *url*.
+
+        Thin convenience wrapper over :meth:`request`; see that
+        method for the full set of supported keyword arguments.
+
+        Args:
+            url: The path (and optional query string) to request.
+            **kwargs: Forwarded verbatim to :meth:`request`.
+
+        Returns:
+            The :class:`TestResponse` produced by the application.
+        """
         return self.request("POST", url, **kwargs)
 
     def put(self, url: str, **kwargs: Any) -> TestResponse:
+        """Issue a ``PUT`` request against *url*.
+
+        Thin convenience wrapper over :meth:`request`; see that
+        method for the full set of supported keyword arguments.
+
+        Args:
+            url: The path (and optional query string) to request.
+            **kwargs: Forwarded verbatim to :meth:`request`.
+
+        Returns:
+            The :class:`TestResponse` produced by the application.
+        """
         return self.request("PUT", url, **kwargs)
 
     def patch(self, url: str, **kwargs: Any) -> TestResponse:
+        """Issue a ``PATCH`` request against *url*.
+
+        Thin convenience wrapper over :meth:`request`; see that
+        method for the full set of supported keyword arguments.
+
+        Args:
+            url: The path (and optional query string) to request.
+            **kwargs: Forwarded verbatim to :meth:`request`.
+
+        Returns:
+            The :class:`TestResponse` produced by the application.
+        """
         return self.request("PATCH", url, **kwargs)
 
     def delete(self, url: str, **kwargs: Any) -> TestResponse:
+        """Issue a ``DELETE`` request against *url*.
+
+        Thin convenience wrapper over :meth:`request`; see that
+        method for the full set of supported keyword arguments.
+
+        Args:
+            url: The path (and optional query string) to request.
+            **kwargs: Forwarded verbatim to :meth:`request`.
+
+        Returns:
+            The :class:`TestResponse` produced by the application.
+        """
         return self.request("DELETE", url, **kwargs)
 
     def websocket_connect(self, url: str, headers: dict | None = None):
+        """Open a synchronous WebSocket connection context for *url*.
+
+        The returned :class:`_TestWebSocket` supports ``send_*`` and
+        ``receive_*`` helpers that capture frames in-memory; it is
+        intended for unit tests of WebSocket handlers without a
+        real network connection.
+
+        Args:
+            url: The WebSocket endpoint to connect to.
+            headers: Optional additional request headers, used when
+                matching the route but not forwarded to the
+                handler. ``None`` is treated as no extras.
+
+        Returns:
+            A :class:`_TestWebSocket` context manager.
+        """
         return _TestWebSocket(self.app, url, headers or {})
 
     def request(
@@ -76,6 +163,41 @@ class TestClient:
         follow_redirects: bool = False,
         max_redirects: int = 20,
     ) -> TestResponse:
+        """Dispatch an in-process request through the application's full pipeline.
+
+        Builds the request envelope, hands it to the compiled
+        :class:`rivex_core.RivexSyncApp` dispatch loop, threads
+        the app's middleware chain around the response, and
+        optionally follows 3xx redirects with the same
+        browser/httpx semantics (303 and 301/302 from non-GET
+        degrade to GET without body; 307/308 replay method and
+        body). The result is normalized into a
+        :class:`TestResponse`.
+
+        Args:
+            method: HTTP verb in any case; uppercased before use.
+            url: Path plus optional query string. May be absolute
+                — only the path/query components are used.
+            headers: Request headers as a ``dict``.
+            params: Query parameters merged into the URL's query
+                string.
+            json: A JSON-serializable value; when set, the body
+                is encoded and ``Content-Type: application/json``
+                is added.
+            data: Either a ``dict`` (form-encoded) or a string
+                (verbatim) body. Sets the form content type.
+            content: Raw body bytes/str, used as-is and overriding
+                ``json``/``data`` when both are provided.
+            follow_redirects: When ``True``, transparently follow
+                3xx ``Location`` responses up to
+                ``max_redirects`` times.
+            max_redirects: Maximum redirect hops when
+                ``follow_redirects`` is enabled.
+
+        Returns:
+            The :class:`TestResponse` returned by the
+            application (after any redirects).
+        """
         request_data = self._build_request(
             method.upper(), url, headers, params, json, data, content
         )
@@ -83,6 +205,22 @@ class TestClient:
         fallback = self.app._fallback_handler
 
         async def _dispatch(req_data: dict) -> dict:
+            """Run the request through the native sync app and apply the fallback handler.
+
+            Awaits the coroutine returned by ``sync_app.dispatch``
+            when one is produced, then handles 404s by re-dispatching
+            through the user's fallback handler (if configured).
+            Any ``body_json`` placeholder is serialized to bytes
+            so downstream middleware operates on a uniform shape.
+
+            Args:
+                req_data: The compiled request envelope built by
+                    :meth:`_build_request`.
+
+            Returns:
+                A response dict ready for the surrounding
+                middleware chain.
+            """
             result = sync_app.dispatch(req_data)
             if asyncio.iscoroutine(result):
                 result = await result
@@ -90,7 +228,7 @@ class TestClient:
             if isinstance(result, dict):
                 status = result.get("status", 0)
                 if status == 404 and fallback is not None:
-                    from rivex.core.requests import Request
+                    from rivex.http.requests import Request
 
                     request = Request._from_raw(req_data)
                     fb_result = fallback(request)
@@ -98,7 +236,7 @@ class TestClient:
                         fb_result = await fb_result
                     if isinstance(fb_result, dict):
                         return fb_result
-                    from rivex.core.responses import Response
+                    from rivex.http.responses import Response
 
                     if isinstance(fb_result, Response):
                         return fb_result._to_raw()
@@ -116,6 +254,23 @@ class TestClient:
             inner = outer_chain
 
             async def _wrap(req_data: dict, *, _mw: Any = mw, _next: Any = inner) -> dict:
+                """Invoke one middleware instance around the remainder of the chain.
+
+                ``_mw`` and ``_next`` are bound through default
+                arguments so the closure captures the current
+                iteration's middleware and downstream callable
+                rather than the loop variable.
+
+                Args:
+                    req_data: The compiled request envelope.
+                    _mw: The current middleware instance.
+                    _next: The awaitable representing the rest of
+                        the chain.
+
+                Returns:
+                    The middleware's response dict, awaited when
+                    ``process`` is a coroutine.
+                """
                 result = _mw.process(req_data, _next)
                 if asyncio.iscoroutine(result):
                     result = await result
@@ -152,6 +307,20 @@ class TestClient:
         return self._to_response(raw)
 
     def _get_sync_app(self) -> rivex_core.RivexSyncApp:
+        """Return the cached native sync app, building it on first use.
+
+        Compiles every route registered on the live application
+        into a :class:`rivex_core.RivexSyncApp` instance the first
+        time it is requested and caches the result on the test
+        client. Compilation includes the route's per-record
+        dependency overrides, exception handlers, response model
+        and middleware chain, plus mounts, liveness/readiness
+        probes, and the test-only AsyncAPI route when configured.
+
+        Returns:
+            The shared :class:`rivex_core.RivexSyncApp` used to
+            dispatch in-process requests.
+        """
         if self._sync_app is not None:
             return self._sync_app
 
@@ -187,6 +356,25 @@ class TestClient:
                     inner = chain
 
                     async def _wrap(rd: dict, *, _mw: Any = mw, _next: Any = inner) -> dict:
+                        """Run one per-route middleware around the route wrapper.
+
+                        ``_mw`` and ``_next`` are bound through
+                        default arguments so the closure captures
+                        the current iteration's middleware and
+                        downstream callable, not the loop
+                        variable.
+
+                        Args:
+                            rd: The compiled request envelope.
+                            _mw: The current middleware instance.
+                            _next: The awaitable for the next
+                                step in the chain.
+
+                        Returns:
+                            The middleware's response dict,
+                            awaited when ``process`` is a
+                            coroutine.
+                        """
                         result = _mw.process(rd, _next)
                         if asyncio.iscoroutine(result):
                             result = await result
@@ -214,6 +402,22 @@ class TestClient:
                 _app: Any = mount_app,
                 _prefix: str = prefix,
             ) -> dict:
+                """Adapt a mounted sub-app to the host application's path space.
+
+                Strips the mount prefix from the inbound path and
+                delegates the (mutated) request envelope to the
+                mounted sub-app, awaiting its response.
+
+                Args:
+                    request_data: The compiled request envelope.
+                    _app: The mounted sub-application.
+                    _prefix: The mount prefix to strip, captured
+                        through a default-argument binding.
+
+                Returns:
+                    The sub-app's response dict, possibly with the
+                    path rebased back into the host's URL space.
+                """
                 original = request_data.get("path", "/")
                 request_data = dict(request_data)
                 request_data["path"] = original[len(_prefix):] or "/"
@@ -236,6 +440,17 @@ class TestClient:
 
         liveness_bytes = b'{"status":"healthy"}'
         async def _k8s_handler(request_data: dict) -> dict:
+            """Return a static liveness/readiness payload for probe routes.
+
+            Args:
+                request_data: The compiled request envelope;
+                    unused — the response is the same for any
+                    probe request.
+
+            Returns:
+                A response dict containing the cached
+                ``{"status": "healthy"}`` JSON body.
+            """
             return {
                 "status": 200,
                 "headers": [("content-type", "application/json")],
@@ -250,6 +465,18 @@ class TestClient:
         return sync_app
 
     def _register_test_asyncapi(self, sync_app: Any) -> None:
+        """Wire AsyncAPI JSON and HTML routes into the test sync app.
+
+        Generates the AsyncAPI spec from the live application's
+        WebSocket routes, then registers a JSON endpoint at
+        ``app.asyncapi_url`` and, when configured, an HTML
+        viewer at ``app.asyncapi_docs_url``. Used so tests can
+        hit the same surface that production serves.
+
+        Args:
+            sync_app: The compiled sync app to extend with the
+                AsyncAPI routes.
+        """
         from rivex.openapi.asyncapi import build_asyncapi_html, generate_asyncapi
 
         spec = generate_asyncapi(
@@ -262,6 +489,16 @@ class TestClient:
         spec_bytes = json.dumps(spec, indent=2).encode("utf-8")
 
         async def handler(request_data: dict) -> dict:
+            """Serve the pre-rendered AsyncAPI JSON spec.
+
+            Args:
+                request_data: The compiled request envelope;
+                    unused.
+
+            Returns:
+                A response dict containing the cached spec
+                bytes and a JSON content type.
+            """
             return {
                 "status": 200,
                 "headers": [("content-type", "application/json")],
@@ -277,6 +514,16 @@ class TestClient:
             )
 
             async def docs_handler(request_data: dict) -> dict:
+                """Serve the pre-rendered AsyncAPI HTML viewer.
+
+                Args:
+                    request_data: The compiled request envelope;
+                        unused.
+
+                Returns:
+                    A response dict containing the cached HTML
+                    bytes and an HTML content type.
+                """
                 return {
                     "status": 200,
                     "headers": [("content-type", "text/html; charset=utf-8")],
@@ -286,18 +533,55 @@ class TestClient:
             sync_app.add_route("GET", self.app.asyncapi_docs_url, docs_handler)
 
     def _get_mw_instances(self) -> list:
+        """Return the app's global middleware instances, instantiating on first use.
+
+        Each registered middleware class is constructed with its
+        stored kwargs; the framework's hook middleware (built via
+        :meth:`Rivex._build_hook_middleware`) is prepended when
+        present so request/response hooks wrap everything else.
+        The result is cached on the test client.
+
+        Returns:
+            A list of middleware instances in registration order
+            with the hook middleware at the front when present.
+        """
         if self._mw_instances is None:
             instances = [cls(**kwargs) for cls, kwargs in self.app._middleware]
             hook_cls = self.app._build_hook_middleware()
             if hook_cls is not None:
-                instances.insert(0, hook_cls()())
+                mw_inst = hook_cls() if isinstance(hook_cls, type) else hook_cls()()
+                instances.insert(0, mw_inst)
             self._mw_instances = instances
         return self._mw_instances
 
-    def _get_route_mw_instances(self, mw_list: list[tuple[type, dict]]) -> list:
+    def _get_route_mw_instances(self, mw_list: list) -> list:
+        """Resolve a route's middleware descriptors to live instances, with caching.
+
+        Each list entry may be a ``(cls, kwargs)`` tuple, a bare
+        class, or an already-instantiated middleware object. The
+        resolved list is cached on ``_route_mw_cache`` keyed by
+        the input list's identity so repeated requests through
+        the same route reuse the instances.
+
+        Args:
+            mw_list: The route's middleware descriptor list.
+
+        Returns:
+            A list of instantiated middleware objects in the
+            same order as ``mw_list``.
+        """
         key = id(tuple(mw_list))
         if key not in self._route_mw_cache:
-            self._route_mw_cache[key] = [cls(**kwargs) for cls, kwargs in mw_list]
+            instances = []
+            for item in mw_list:
+                if isinstance(item, tuple) and len(item) == 2:
+                    cls, kwargs = item
+                    instances.append(cls(**kwargs))
+                elif isinstance(item, type):
+                    instances.append(item())
+                else:
+                    instances.append(item)
+            self._route_mw_cache[key] = instances
         return self._route_mw_cache[key]
 
     def _build_request(
@@ -310,6 +594,30 @@ class TestClient:
         data: Any,
         content: bytes | str | None,
     ) -> dict:
+        """Assemble the raw request envelope consumed by the native sync app.
+
+        Extracts path and query string from *url*, merges any
+        explicit *params* into the query, lower-cases header
+        names, and serializes the body in priority order:
+        ``content`` (raw) > ``data`` (form-encoded) > ``json``
+        (JSON-encoded with the matching content type). The
+        returned dict matches the shape produced by the live
+        server's request decoder.
+
+        Args:
+            method: Uppercase HTTP verb.
+            url: Path plus optional query string.
+            headers: Request headers, lower-cased on insertion.
+            params: Extra query parameters appended to the URL.
+            body_json: JSON-serializable payload.
+            data: Form-encoded payload (``dict`` or ``str``).
+            content: Raw body bytes or string; overrides
+                ``body_json``/``data`` when provided.
+
+        Returns:
+            A dict with ``method``, ``path``, ``path_params``,
+            ``query_string``, ``headers``, and ``body`` keys.
+        """
         split = urlsplit(url)
         path = split.path or "/"
         query = split.query
@@ -342,6 +650,22 @@ class TestClient:
         }
 
     def _to_response(self, raw: dict) -> TestResponse:
+        """Normalize a raw response dict into a :class:`TestResponse`.
+
+        Drains streaming responses (synchronously awaiting the
+        iterator when it is async) and serializes the
+        ``body_json`` placeholder when present so the resulting
+        object always exposes a bytes body.
+
+        Args:
+            raw: The response dict returned by the dispatch
+                chain.
+
+        Returns:
+            A :class:`TestResponse` populated with the
+            lower-cased headers, decoded body, and status code
+            from *raw*.
+        """
         stream_iter = raw.get("_stream_iter")
         if stream_iter is not None:
             body = self._collect_stream(stream_iter, raw.get("_stream_async", True))
@@ -363,6 +687,17 @@ class TestClient:
         if is_async:
 
             async def _collect() -> list[bytes]:
+                """Drain the async stream iterator into a list of byte chunks.
+
+                Each chunk is normalized to ``bytes``: ``str`` is
+                UTF-8 encoded, anything else is converted via
+                :class:`str`. The collected list is returned in
+                iteration order so the caller can join it into
+                the final response body.
+
+                Returns:
+                    A list of byte chunks in stream order.
+                """
                 result: list[bytes] = []
                 async for chunk in stream_iter:
                     if isinstance(chunk, str):
@@ -406,21 +741,56 @@ class _TestWebSocket:
         pass
 
     def send_text(self, data: str):
+        """Buffer a text frame for the in-memory WebSocket.
+
+        Args:
+            data: The text payload to record.
+        """
         self._sent.append(("text", data))
 
     def send_json(self, data: Any):
+        """Buffer a JSON frame for the in-memory WebSocket.
+
+        Args:
+            data: A JSON-serializable value; recorded verbatim
+                and not pre-serialized.
+        """
         self._sent.append(("json", data))
 
     def receive_text(self) -> str:
+        """Pop the next buffered text frame, or ``""`` when empty.
+
+        Returns:
+            The next text payload, or an empty string when no
+            frames are available.
+        """
         if self._received:
             text: str = self._received.pop(0)
             return text
         return ""
 
     def receive_json(self) -> Any:
+        """Pop the next buffered frame and parse it as JSON.
+
+        Returns:
+            The decoded JSON value, or ``None`` when no frames
+            are buffered.
+        """
         text = self.receive_text()
         return json.loads(text) if text else None
 
 
 def json_module_dumps(value: Any) -> bytes:
+    """Serialize a value to UTF-8 encoded JSON bytes.
+
+    Thin wrapper around :func:`json.dumps` used as the
+    canonical test-time encoder so the body produced here
+    matches what production handlers see.
+
+    Args:
+        value: Any JSON-serializable value.
+
+    Returns:
+        The value encoded as UTF-8 bytes.
+    """
     return json.dumps(value).encode("utf-8")

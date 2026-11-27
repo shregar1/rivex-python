@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from rivex.core.context import (
+from rivex.context.context import (
     RequestContext,
     RequestContextMiddleware,
     bind_extra,

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from rivex.core._compat import HAS_CORE
-from rivex.core._compat import rc as _rc
+from rivex.native._compat import HAS_CORE
+from rivex.native._compat import rc as _rc
 
 
 def parse_accept(accept_header: str) -> list[tuple[str, float]]:

@@ -26,7 +26,7 @@ def _load_module(name: str, relative: str):
     return mod
 
 
-_bodies = _load_module("rivex_bodies_under_test", "core/_bodies.py")
+_bodies = _load_module("rivex_bodies_under_test", "serialization/_bodies.py")
 
 
 # ---------------------------------------------------------------------------
@@ -36,7 +36,6 @@ _bodies = _load_module("rivex_bodies_under_test", "core/_bodies.py")
 
 def test_body_schema_constants() -> None:
     assert _bodies.BodySchema.PYDANTIC == "pydantic"
-    assert _bodies.BodySchema.SCHEMAX == "schemax"
     assert _bodies.BodySchema.MARSHMALLOW == "marshmallow"
     assert _bodies.BodySchema.DICT == "dict"
     assert _bodies.BodySchema.UNKNOWN == "unknown"
@@ -105,7 +104,7 @@ def test_coerce_body_dict_from_passthrough() -> None:
 
 
 def test_coerce_body_dict_invalid_json_raises() -> None:
-    from rivex.core.exceptions import RequestValidationError
+    from rivex.exceptions.http.exceptions import RequestValidationError
 
     with pytest.raises(RequestValidationError):
         _bodies.coerce_body(b"not json", dict)
@@ -138,57 +137,6 @@ def test_body_schema_pydantic_when_available() -> None:
         name: str
 
     assert _bodies.body_schema(User) == "pydantic"
-
-
-# ---------------------------------------------------------------------------
-# Schemax backend
-# ---------------------------------------------------------------------------
-
-
-def test_coerce_body_schemax_when_available() -> None:
-    pytest.importorskip("schemax", reason="schemax not installed")
-    from schemax.idl.codegen import render
-    from schemax.idl.parser import parse
-    from schemax.idl.runtime import Message
-
-    src = """
-package test.v1;
-
-message GreetRequest {
-    string name = 1;
-}
-"""
-    file = parse(src)
-    code = render(file)
-    namespace: dict[str, Any] = {"Message": Message}
-    exec(code, namespace)
-    GreetRequest = namespace["GreetRequest"]
-
-    body = b'{"name": "Bob"}'
-    out = _bodies.coerce_body(body, GreetRequest)
-    # GreetRequest is a Message subclass with from_json / from_dict
-    assert out.name == "Bob" or out.to_dict()["1"] == "Bob"
-
-
-def test_body_schema_schemax_when_available() -> None:
-    pytest.importorskip("schemax", reason="schemax not installed")
-    from schemax.idl.codegen import render
-    from schemax.idl.parser import parse
-    from schemax.idl.runtime import Message
-
-    src = """
-package test.v1;
-
-message HiRequest {
-    string who = 1;
-}
-"""
-    file = parse(src)
-    code = render(file)
-    namespace: dict[str, Any] = {"Message": Message}
-    exec(code, namespace)
-    HiRequest = namespace["HiRequest"]
-    assert _bodies.body_schema(HiRequest) == "schemax"
 
 
 # ---------------------------------------------------------------------------
@@ -227,7 +175,7 @@ def test_coerce_body_marshmallow_validation_error() -> None:
         # require ``name`` to be a non-empty string; missing key fails.
         name = fields.String(required=True, validate=validate.Length(min=1))
 
-    from rivex.core.exceptions import RequestValidationError
+    from rivex.exceptions.http.exceptions import RequestValidationError
 
     # Missing required field -> marshmallow raises, Rivex wraps it.
     with pytest.raises((RequestValidationError, ValidationError)):
@@ -283,7 +231,7 @@ def test_register_body_schema_extends_detection() -> None:
 
 
 def test_coerce_body_unknown_type_raises() -> None:
-    from rivex.core.exceptions import RequestValidationError
+    from rivex.exceptions.http.exceptions import RequestValidationError
 
     class Unrelated:
         pass
@@ -293,14 +241,14 @@ def test_coerce_body_unknown_type_raises() -> None:
 
 
 def test_coerce_body_unsupported_body_type() -> None:
-    from rivex.core.exceptions import RequestValidationError
+    from rivex.exceptions.http.exceptions import RequestValidationError
 
     with pytest.raises(RequestValidationError):
         _bodies.coerce_body(12345, dict)
 
 
 def test_coerce_body_invalid_utf8() -> None:
-    from rivex.core.exceptions import RequestValidationError
+    from rivex.exceptions.http.exceptions import RequestValidationError
 
     with pytest.raises(RequestValidationError):
         _bodies.coerce_body(b"\xff\xfe", dict)

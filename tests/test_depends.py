@@ -2,8 +2,8 @@ import json
 
 import pytest
 
-from rivex.core._injection import build_handler_wrapper
-from rivex.core.dependencies import Dependency, Depends
+from rivex.di._injection import build_handler_wrapper
+from rivex.di.dependencies import Dependency, Depends
 
 
 def _make_request(**overrides):
@@ -54,7 +54,7 @@ async def test_async_depends():
 
 @pytest.mark.asyncio
 async def test_depends_with_request():
-    from rivex.core.requests import Request
+    from rivex.http.requests import Request
 
     def get_token(request: Request):
         return request.header("authorization", "none")
@@ -69,7 +69,7 @@ async def test_depends_with_request():
 
 @pytest.mark.asyncio
 async def test_class_dependency_type_with_request():
-    from rivex.core.requests import Request
+    from rivex.http.requests import Request
 
     class CurrentUser:
         async def __call__(self, request: Request):
@@ -85,7 +85,7 @@ async def test_class_dependency_type_with_request():
 
 @pytest.mark.asyncio
 async def test_dependency_base_resolve_method():
-    from rivex.core.requests import Request
+    from rivex.http.requests import Request
 
     class TenantDependency(Dependency):
         def resolve(self, request: Request):
@@ -197,7 +197,7 @@ async def test_depends_with_path_and_query():
 
 @pytest.mark.asyncio
 async def test_dependency_receives_path_query_and_request_url():
-    from rivex.core.requests import Request
+    from rivex.http.requests import Request
 
     def audit_context(item_id: int, verbose: bool, request: Request):
         return {

@@ -39,6 +39,22 @@ class Sitemap:
         priority: float | None = None,
         images: list[str] | None = None,
     ) -> None:
+        """Add a single ``<url>`` entry to the sitemap.
+
+        When the Rust core is available the arguments are forwarded as-is
+        to ``PySitemap.add_url``; otherwise they are stored in the
+        internal ``_urls`` list and rendered by :meth:`render`.
+
+        Args:
+            loc: Absolute URL of the page being indexed.
+            lastmod: Optional ISO-8601 last-modified timestamp.
+            changefreq: Optional change-frequency hint (``"daily"``,
+                ``"weekly"``, etc.).
+            priority: Optional float in the range ``0.0`` to ``1.0``;
+                formatted to one decimal place before being written.
+            images: Optional list of absolute image URLs that should
+                appear inside ``<image:image>``.
+        """
         if self._rust:
             prio_str = f"{priority:.1f}" if priority is not None else None
             self._rust.add_url(loc, lastmod, changefreq, prio_str, images)
@@ -55,6 +71,14 @@ class Sitemap:
         self._urls.append(entry)
 
     def render(self) -> str:
+        """Serialize the accumulated URLs into a Sitemap XML document.
+
+        Returns:
+            The XML document as a UTF-8 encoded ``str``. When the Rust
+            core is available it produces the document; otherwise a
+            pure-Python emitter walks ``self._urls`` and emits
+            ``<urlset>`` / ``<url>`` blocks.
+        """
         if self._rust:
             return self._rust.render()
         from xml.sax.saxutils import escape
@@ -97,6 +121,12 @@ class SitemapIndex:
         self._sitemaps: list[dict] = []
 
     def add_sitemap(self, loc: str, lastmod: str | None = None) -> None:
+        """Register a sub-sitemap URL with the index document.
+
+        Args:
+            loc: Absolute URL of the sub-sitemap document.
+            lastmod: Optional ISO-8601 last-modified timestamp.
+        """
         if self._rust:
             self._rust.add_sitemap(loc, lastmod)
             return
@@ -106,6 +136,13 @@ class SitemapIndex:
         self._sitemaps.append(entry)
 
     def render(self) -> str:
+        """Serialize the accumulated sitemap URLs into an index document.
+
+        Returns:
+            The ``<sitemapindex>`` XML document as a UTF-8 encoded
+            ``str``. Rust or pure-Python implementations are dispatched
+            transparently depending on availability.
+        """
         if self._rust:
             return self._rust.render()
         from xml.sax.saxutils import escape
@@ -153,6 +190,20 @@ class RssFeed:
         guid: str | None = None,
         category: str | None = None,
     ) -> None:
+        """Append a single ``<item>`` entry to the RSS channel.
+
+        Args:
+            title: Display title of the entry.
+            link: Canonical URL of the entry.
+            description: Short text or HTML body of the entry.
+            pub_date: Optional ISO-8601 publication date; reformatted
+                to RFC-822 via :meth:`_format_date` when the Rust core
+                is unavailable.
+            author: Optional author identity string.
+            guid: Optional globally-unique identifier; omit to let the
+                feed reader default to ``link``.
+            category: Optional category label.
+        """
         if self._rust:
             self._rust.add_item(title, link, description, pub_date, author, guid, category)
             return
@@ -168,6 +219,19 @@ class RssFeed:
         self._items.append(item)
 
     def _format_date(self, date_str: str) -> str:
+        """Convert an ISO-8601 timestamp to the RFC-822 format used by RSS.
+
+        Handles trailing ``Z`` as ``+00:00``. If parsing fails, the
+        original string is returned untouched so the caller's content
+        still appears in the feed.
+
+        Args:
+            date_str: An ISO-8601 timestamp (``"YYYY-MM-DDTHH:MM:SSZ"``
+                or similar).
+
+        Returns:
+            The reformatted timestamp suitable for ``<pubDate>``.
+        """
         try:
             dt = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
             return dt.strftime("%a, %d %b %Y %H:%M:%S %z")
@@ -175,6 +239,13 @@ class RssFeed:
             return date_str
 
     def render(self) -> str:
+        """Serialize the channel and its items into an RSS 2.0 document.
+
+        Returns:
+            The ``<rss><channel>...</channel></rss>`` XML document as a
+            UTF-8 encoded ``str``. Rust or pure-Python implementations
+            are dispatched depending on availability.
+        """
         if self._rust:
             return self._rust.render()
         from xml.sax.saxutils import escape
@@ -238,6 +309,21 @@ class AtomFeed:
         author_email: str | None = None,
         category: str | None = None,
     ) -> None:
+        """Append a single ``<entry>`` to the Atom feed.
+
+        Args:
+            title: Display title of the entry.
+            link: Canonical URL of the entry; also reused as the entry
+                ``<id>`` for the pure-Python fallback.
+            summary: Short text or HTML body of the entry.
+            updated: Optional ISO-8601 ``updated`` timestamp. Defaults
+                to "now" in UTC when omitted.
+            published: Optional ISO-8601 ``published`` timestamp.
+            author_name: Optional display name of the author.
+            author_email: Optional e-mail of the author.
+            category: Optional ``term`` attribute for the
+                ``<category>`` element.
+        """
         if self._rust:
             updated_str = updated or datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
             self._rust.add_entry(title, link, summary, updated_str, published, author_name, author_email, category)
@@ -258,6 +344,13 @@ class AtomFeed:
         self._entries.append(entry)
 
     def render(self) -> str:
+        """Serialize the feed and its entries into an Atom document.
+
+        Returns:
+            The ``<feed>...</feed>`` XML document as a UTF-8 encoded
+            ``str``. Rust or pure-Python implementations are dispatched
+            depending on availability.
+        """
         if self._rust:
             return self._rust.render()
         from xml.sax.saxutils import escape

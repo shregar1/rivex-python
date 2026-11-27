@@ -37,7 +37,7 @@ def _start_server(app: rivex.Rivex) -> int:
 
         def _run(p=port) -> None:
             try:
-                app.run_sync(host="127.0.0.1", port=p, workers=1)
+                app.run_async(host="127.0.0.1", port=p)
             except Exception:
                 pass
 
@@ -74,12 +74,14 @@ def _http(
 
 @pytest.fixture
 def hello_app():
-    """An app with a single GET /hello const route and Tier 1 security."""
-    app = rivex.Rivex()
-    app.add_const_route(
-        "GET", "/hello", status=200, body=b'{"hello":"world"}',
-        headers={"content-type": "application/json"},
-    )
+    """An app with a single GET /hello route and Tier 1 security."""
+    app = rivex.Rivex(docs_url=None, redoc_url=None, openapi_url=None, landing_page=False)
+
+    @app.get("/hello")
+    def hello():
+        import json
+        return {"hello": "world"}
+
     return app
 
 
@@ -205,12 +207,12 @@ def test_trusted_host_wildcard(hello_app):
 
 def test_xss_escapes_html_responses(hello_app):
     port = _free_port()
-    # Add an HTML const route with raw user data.
-    hello_app.add_const_route(
-        "GET", "/greet", status=200,
-        body=b"<html><body>Hello <script>alert(1)</script></body></html>",
-        headers={"content-type": "text/html"},
-    )
+    # Add an HTML route with raw user data that contains a script tag.
+    @hello_app.get("/greet")
+    def greet():
+        from rivex.http.responses import HTMLResponse
+        return HTMLResponse("<html><body>Hello <script>alert(1)</script></body></html>")
+
     hello_app.with_security(xss={"auto_escape_html": True})
     port = _start_server(hello_app)
     r = _http("GET", f"http://127.0.0.1:{port}/greet")
@@ -228,10 +230,11 @@ def test_xss_escapes_html_responses(hello_app):
 
 def test_oversize_body_rejected(hello_app):
     port = _free_port()
-    hello_app.add_const_route(
-        "POST", "/echo", status=200, body=b"",
-        headers={"content-type": "text/plain"},
-    )
+
+    @hello_app.post("/echo")
+    def echo_post():
+        return ""
+
     hello_app.with_security(max_body_size=1024)
     port = _start_server(hello_app)
     r = _http("POST", f"http://127.0.0.1:{port}/echo",
@@ -242,10 +245,11 @@ def test_oversize_body_rejected(hello_app):
 
 def test_undersize_body_allowed(hello_app):
     port = _free_port()
-    hello_app.add_const_route(
-        "POST", "/echo", status=200, body=b"",
-        headers={"content-type": "text/plain"},
-    )
+
+    @hello_app.post("/echo")
+    def echo_post_small():
+        return ""
+
     hello_app.with_security(max_body_size=1024)
     port = _start_server(hello_app)
     r = _http("POST", f"http://127.0.0.1:{port}/echo",
@@ -259,15 +263,16 @@ def test_undersize_body_allowed(hello_app):
 
 def test_all_tier1_enabled_together():
     """Stack all six protections and confirm each still does its job."""
-    app = rivex.Rivex()
-    app.add_const_route(
-        "GET", "/hello", status=200, body=b'{"hello":"world"}',
-        headers={"content-type": "application/json"},
-    )
-    app.add_const_route(
-        "POST", "/echo", status=200, body=b"",
-        headers={"content-type": "text/plain"},
-    )
+    app = rivex.Rivex(docs_url=None, redoc_url=None, openapi_url=None, landing_page=False)
+
+    @app.get("/hello")
+    def hello():
+        return {"hello": "world"}
+
+    @app.post("/echo")
+    def echo():
+        return ""
+
     app.with_security(
         cors={"allow_origins": ["https://example.com"],
               "allow_methods": ["GET", "POST"], "max_age": 3600},

@@ -21,7 +21,7 @@ from rivex.middleware.middleware import (
 )
 from rivex.web.negotiation import best_match, parse_accept
 from rivex.data.pagination import CursorPage, paginate
-from rivex.core.responses import EventSourceResponse
+from rivex.http.responses import EventSourceResponse
 from rivex.protocols.ws import ConnectionManager
 
 # ── SSE ──
@@ -284,7 +284,7 @@ def test_fallback_handler():
         return {"ok": True}
 
     async def custom_404(request):
-        from rivex.core.responses import JSONResponse
+        from rivex.http.responses import JSONResponse
 
         return JSONResponse({"error": "not found", "path": request.path}, status_code=404)
 

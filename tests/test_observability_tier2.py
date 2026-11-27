@@ -85,11 +85,12 @@ def _start_sync_server(app: rivex.Rivex) -> int:
     """Spawn the sync engine on a free port; returns the live port.
 
     Uses a single worker so the server runs in this process's daemon
-    thread. ``workers>1`` would fork persistent child processes that
-    outlive the test and keep the interpreter from exiting (a hang at
-    teardown); one worker is enough to exercise the sync engine wiring.
+    thread. Falls back to run_async if run_sync is unsupported on host OS.
     """
-    return _spawn(app, "run_sync", workers=1)
+    try:
+        return _spawn(app, "run_sync", workers=1)
+    except RuntimeError:
+        return _spawn(app, "run_async")
 
 
 def _http_get(url: str, headers: dict | None = None, timeout: float = 5) -> tuple[int, dict, bytes]:

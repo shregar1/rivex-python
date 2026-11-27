@@ -18,7 +18,7 @@ from rivex import (
     Rivex,
     TestClient,
 )
-from rivex.core.exceptions import RequestValidationError, WebSocketDisconnect
+from rivex.exceptions.http.exceptions import RequestValidationError, WebSocketDisconnect
 from rivex.auth.security import (
     APIKeyCookie,
     APIKeyQuery,
@@ -608,7 +608,7 @@ class TestWebSocketDisconnect:
 class TestOpenAPINewParams:
     def test_query_param_in_openapi(self):
         from rivex.openapi.openapi import generate_openapi
-        from rivex.core.routing import RouteRecord
+        from rivex.web.routing import RouteRecord
 
         async def endpoint(q: str = Query(..., description="Search query", min_length=1)):
             pass
@@ -635,7 +635,7 @@ class TestOpenAPINewParams:
 
     def test_header_param_in_openapi(self):
         from rivex.openapi.openapi import generate_openapi
-        from rivex.core.routing import RouteRecord
+        from rivex.web.routing import RouteRecord
 
         async def endpoint(x_token: str = Header(...)):
             pass
@@ -658,7 +658,7 @@ class TestOpenAPINewParams:
 
     def test_cookie_param_in_openapi(self):
         from rivex.openapi.openapi import generate_openapi
-        from rivex.core.routing import RouteRecord
+        from rivex.web.routing import RouteRecord
 
         async def endpoint(session: str = Cookie("guest")):
             pass
@@ -681,7 +681,7 @@ class TestOpenAPINewParams:
 
     def test_path_param_with_constraints_in_openapi(self):
         from rivex.openapi.openapi import generate_openapi
-        from rivex.core.routing import RouteRecord
+        from rivex.web.routing import RouteRecord
 
         async def endpoint(item_id: int = Path(..., ge=1, le=1000)):
             pass

@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "rivex-py"
-version = "0.2.5"
+version = "0.3.1"
 description = "A Rust-powered Python web framework with FastAPI-like ergonomics"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -132,17 +132,12 @@ react = ["rivex-react>=0.2.0"]
 # (``app.run()`` and ``app.run_sync()``) are faster and don't
 # require any extra dependency.
 uvicorn = ["uvicorn>=0.30"]
-# Optional: install the standalone `schemax` package to use Rivex with the
-# IDL toolchain (`rivex.schemax` shim + `rivex schemax …` CLI). The IDL
-# code lives at `schemax.idl` in the standalone package.
-schemax = ["schemax>=0.1.0"]
 dev = [
     "pytest>=7.0",
     "pytest-asyncio>=0.21",
     "httpx>=0.27",
     "mypy>=1.0",
     "ruff>=0.4",
-    "schemax>=0.1.0",
     "rivex-admin>=0.2.0",
     "rivex-codegen>=0.2.0",
     "rivex-scaffold>=0.2.0",

@@ -31,6 +31,22 @@ class Field:
         self.allow_null = allow_null
 
     def to_internal_value(self, data: Any) -> Any:
+        """Convert a raw input value into the field's Python type.
+
+        Honours ``allow_null`` (returns ``None`` unchanged), then
+        dispatches on ``field_type`` to coerce the common primitive
+        types (``int``, ``float``, ``bool``). Any other type falls
+        through to ``str(data)`` so the validator pipeline still
+        sees a string-shaped value.
+
+        Args:
+            data: The raw value as received from the request or
+                the upstream serializer.
+
+        Returns:
+            The coerced value suitable for further validation
+            and storage.
+        """
         if data is None and self.allow_null:
             return None
         if self.field_type is int:
@@ -44,6 +60,19 @@ class Field:
         return str(data)
 
     def to_representation(self, value: Any) -> Any:
+        """Return the value to expose when serializing this field.
+
+        The default implementation is a pass-through so subclass
+        fields can override it for any custom rendering
+        (formatted datetimes, masked strings, etc.) without
+        needing to special-case the rest of the field.
+
+        Args:
+            value: The Python value held on the model instance.
+
+        Returns:
+            The value to put into the serialized output.
+        """
         return value
 
 
@@ -67,6 +96,14 @@ class Serializer(ABC):
         self._build_fields()
 
     def _build_fields(self) -> None:
+        """Populate ``self._fields`` from class-level ``Field`` declarations.
+
+        Walks the class via :func:`dir` and stores any
+        :class:`Field` instance found on the class under its
+        attribute name. Called from ``__init__`` so the field
+        map is available before any other serializer method
+        runs.
+        """
         for attr_name in dir(self.__class__):
             val = getattr(self.__class__, attr_name)
             if isinstance(val, Field):
@@ -74,17 +111,38 @@ class Serializer(ABC):
 
     @property
     def fields(self) -> dict[str, Field]:
+        """Return a copy of the field map for introspection."""
         return dict(self._fields)
 
     @property
     def errors(self) -> dict[str, list[str]]:
+        """Return a copy of the per-field validation errors from the last :meth:`is_valid` call."""
         return dict(self._errors)
 
     @property
     def validated_data(self) -> dict[str, Any]:
+        """Return a copy of the cleaned values produced by the last successful :meth:`is_valid` call."""
         return dict(self._validated_data)
 
     def is_valid(self, raise_exception: bool = False) -> bool:
+        """Validate the bound data and populate :attr:`errors` and :attr:`validated_data`.
+
+        Iterates every non-read-only field, applies the
+        ``default``/``required``/``allow_null`` rules, coerces
+        via :meth:`Field.to_internal_value`, and runs each
+        field's ``validators`` chain. Errors accumulate per
+        field rather than aborting so callers see every
+        problem in one pass.
+
+        Args:
+            raise_exception: When ``True``, raise
+                :class:`ValueError` with the collected errors
+                if any field failed. Default ``False``.
+
+        Returns:
+            ``True`` when no field produced an error, otherwise
+            ``False``.
+        """
         self._errors = {}
         self._validated_data = {}
         for name, field in self._fields.items():
@@ -107,6 +165,22 @@ class Serializer(ABC):
         return len(self._errors) == 0
 
     def to_representation(self, instance: Any) -> dict:
+        """Build a JSON-serialisable dict from *instance* using the declared fields.
+
+        Skips write-only fields and reads the value through
+        ``field.source or name`` so callers can remap a
+        serializer key onto a differently-named attribute on
+        the model.
+
+        Args:
+            instance: A model instance or ``dict`` whose
+                attributes back the serialized output.
+
+        Returns:
+            A ``dict`` keyed by serializer field name with
+            each value passed through
+            :meth:`Field.to_representation`.
+        """
         result: dict[str, Any] = {}
         for name, field in self._fields.items():
             if field.write_only:
@@ -129,6 +203,15 @@ class ModelSerializer(Serializer):
     _model_cls: type | None = None
 
     def _build_fields(self) -> None:
+        """Inherit parent fields and add fields derived from ``_model_cls`` annotations.
+
+        After running the base :meth:`Serializer._build_fields`
+        the method also inspects the type hints on
+        ``_model_cls`` and adds a default :class:`Field` for any
+        attribute the serializer has not already declared
+        explicitly — this is what makes a ``ModelSerializer``
+        "just work" against a pydantic/dataclass model.
+        """
         super()._build_fields()
         model_cls = getattr(self.__class__, "_model_cls", None) or getattr(self, "_model_cls", None)
         if model_cls:
@@ -145,6 +228,25 @@ class ListSerializer(Serializer):
     child: Serializer | None = None
 
     def is_valid(self, raise_exception: bool = False) -> bool:
+        """Validate each list element through the configured ``child`` serializer.
+
+        When ``child`` is ``None`` the data is accepted as long
+        as it is a list — no per-element validation runs. With a
+        child, each item is wrapped in a fresh child instance,
+        validated, and any errors are merged back with the
+        index prefix so the caller can tell which element
+        failed.
+
+        Args:
+            raise_exception: Forwarded for API parity with
+                :meth:`Serializer.is_valid`; this implementation
+                never raises.
+
+        Returns:
+            ``True`` when the data is a list (and every child
+            validated, if a child is configured); ``False``
+            otherwise.
+        """
         if not isinstance(self._data, list):
             self._errors = {"_non_field": ["Expected a list of items."]}
             return False
@@ -158,6 +260,21 @@ class ListSerializer(Serializer):
         return len(self._errors) == 0
 
     def to_representation(self, instances: list) -> list[dict]:
+        """Serialize each item of *instances* through ``self.child``.
+
+        When ``child`` is ``None`` the input list is returned
+        unchanged — the list serializer cannot synthesize a
+        representation without a template.
+
+        Args:
+            instances: The list of model instances (or dicts)
+                to serialize.
+
+        Returns:
+            A list with each item passed through
+            ``self.child.to_representation`` when a child is
+            configured; the input list otherwise.
+        """
         if self.child is None:
             return list(instances)
         return [self.child.to_representation(inst) for inst in instances]

@@ -40,6 +40,18 @@ def run_bench(
     errors = 0
 
     def make_request() -> tuple[float, int]:
+        """Issue a single HTTP request and return ``(elapsed_seconds, status)``.
+
+        A ``URLError`` (network/connection failure) or any unexpected
+        exception is reported as status ``0`` so the caller can bucket
+        the result alongside genuine HTTP errors. Only successful
+        2xx/3xx responses contribute to the latency distribution.
+
+        Returns:
+            A ``(elapsed_seconds, status_code)`` tuple. ``status_code``
+            is the HTTP status on success, or ``0`` when the call
+            failed before a response was received.
+        """
         start = time.perf_counter()
         try:
             req = Request(url, method=method)
@@ -94,11 +106,39 @@ def run_bench(
 
 
 def _percentile(data: list[float], p: int) -> float:
+    """Return the ``p``-th percentile of a sorted latency sample.
+
+    Uses a nearest-rank estimator: ``data`` must be sorted in
+    ascending order (the bench loop sorts before calling this).
+    Out-of-range percentiles are clamped to the largest index so
+    ``p99`` against a 50-sample list still returns a valid value.
+
+    Args:
+        data: Latency samples in seconds, sorted ascending.
+        p: Percentile to extract, in the closed range ``[0, 100]``.
+
+    Returns:
+        The chosen latency value in seconds.
+    """
     idx = int(len(data) * p / 100)
     return data[min(idx, len(data) - 1)]
 
 
 def _ms(seconds: float) -> str:
+    """Format a latency in seconds as a human-friendly short string.
+
+    Microseconds (``µs``) are used below 1 ms, milliseconds
+    (``ms``) below one second, and seconds otherwise. The unit is
+    chosen automatically based on magnitude rather than caller
+    configuration.
+
+    Args:
+        seconds: Latency in seconds.
+
+    Returns:
+        The latency plus an appropriate unit suffix, e.g. ``"1.2ms"``
+        or ``"0.42s"``.
+    """
     if seconds < 0.001:
         return f"{seconds * 1_000_000:.0f}µs"
     if seconds < 1.0:

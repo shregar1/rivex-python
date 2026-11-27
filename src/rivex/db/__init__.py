@@ -42,10 +42,37 @@ _DRIVERS: dict[str, type[DatabasePool]] = {}
 
 
 def register_driver(scheme: str, pool_cls: type[DatabasePool]) -> None:
+    """Register a :class:`DatabasePool` subclass under a URL *scheme*.
+
+    Driver modules call this at import time so :func:`_detect_driver`
+    can later resolve a connection URL to the matching implementation.
+
+    Args:
+        scheme: Lowercase URL scheme (e.g. ``"sqlite"``,
+            ``"postgresql"``) used as the lookup key.
+        pool_cls: Concrete :class:`DatabasePool` subclass that will be
+            instantiated for matching URLs.
+    """
     _DRIVERS[scheme] = pool_cls
 
 
 def _detect_driver(url: str) -> type[DatabasePool]:
+    """Resolve a connection URL to its registered :class:`DatabasePool` class.
+
+    Performs a small amount of scheme aliasing (for example folding
+    ``postgres`` into ``postgresql``) before looking the scheme up in
+    the driver registry.
+
+    Args:
+        url: Connection URL of the form ``"<scheme>://..."``.
+
+    Returns:
+        The :class:`DatabasePool` subclass registered for the URL's
+        scheme.
+
+    Raises:
+        ValueError: If no driver is registered for the resolved scheme.
+    """
     scheme = url.split("://", 1)[0].lower()
     scheme = {
         "postgres": "postgresql",
@@ -87,10 +114,12 @@ class DatabaseConfig:
 
     @property
     def min_size(self) -> int:
+        """Return the minimum (steady-state) pool size."""
         return self.pool_size
 
     @property
     def max_size(self) -> int:
+        """Return the maximum number of connections the pool may open."""
         return self.pool_size + self.max_overflow
 
 
@@ -161,6 +190,12 @@ class DatabaseRegistry:
         self._configs[name] = DatabaseConfig(url=url, **kwargs)
 
     def _ensure_connected(self) -> None:
+        """Raise if :meth:`connect_all` has not yet been awaited.
+
+        Acts as a guard for synchronous accessors such as :meth:`pool`
+        so that callers get a clear error before any I/O would normally
+        have started.
+        """
         if not self._connected:
             raise RuntimeError(
                 "Database pool not connected. "

@@ -23,7 +23,7 @@ from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
-    from rivex.core.applications import Rivex
+    from rivex.applications.applications import Rivex
 
 try:  # pragma: no cover
     from rivex_admin.db import default_db_path as _admin_default_db_path

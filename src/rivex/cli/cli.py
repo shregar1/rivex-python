@@ -6,6 +6,21 @@ import sys
 
 
 def main(argv: list[str] | None = None) -> None:
+    """Entry point for the ``rivex`` command-line interface.
+
+    Parses ``argv`` and dispatches to one of the registered
+    sub-commands (``dev``, ``run``, ``routes``, ``openapi``,
+    ``bench``, ``version``, ``createsuperuser``, ``admin``,
+    ``generate`` / ``new``, ``management``, ``test``). Several of
+    the heavier sub-commands (``generate``, ``admin``,
+    ``createsuperuser``) are forwarded to optional companion
+    packages and produce a clear install hint when missing.
+    ``sys.argv[1:]`` is used when *argv* is omitted.
+
+    Args:
+        argv: CLI argument vector. ``None`` reads from
+            :data:`sys.argv`.
+    """
     parser = argparse.ArgumentParser(prog="rivex", description="Rivex CLI")
     sub = parser.add_subparsers(dest="command")
 
@@ -168,14 +183,6 @@ def main(argv: list[str] | None = None) -> None:
         add_help=False,
     )
 
-    # rivex schemax — Schemax IDL toolchain (now lives in the standalone
-    # `schemax` package as `schemax.idl`). Forwards remaining args.
-    sub.add_parser(
-        "schemax",
-        help="Schemax IDL toolchain (compile, check, fmt, inspect) — runs `schemax idl`",
-        add_help=False,
-    )
-
     # rivex management commands — discovered from management_commands/
     mgmt_sub = sub.add_parser(
         "management",
@@ -236,17 +243,6 @@ def main(argv: list[str] | None = None) -> None:
             )
             raise SystemExit(2) from None
         raise SystemExit(admin_cli_main(argv[1:]))
-    if len(argv) >= 1 and argv[0] == "schemax":
-        try:
-            from schemax.idl.cli import main as schemax_main
-        except ImportError:
-            print(
-                "Error: `rivex schemax` now requires the `schemax` package. "
-                "Install with: pip install schemax",
-                file=sys.stderr,
-            )
-            raise SystemExit(2) from None
-        raise SystemExit(schemax_main(argv[1:]))
     if len(argv) >= 1 and argv[0] == "test":
         _run_test(argv[1:])
         return
@@ -317,6 +313,25 @@ def main(argv: list[str] | None = None) -> None:
 
 
 def _import_app(path: str):
+    """Resolve a ``module:attribute`` import path into a live Python object.
+
+    Used by every ``rivex`` sub-command that needs the user's app
+    (e.g. ``routes``, ``openapi``, ``run``). The current directory
+    is added to :data:`sys.path` exactly once so locally-edited
+    packages resolve first, and the attribute name is required —
+    bare module paths are rejected with a clear error.
+
+    Args:
+        path: ``module:attribute`` string identifying the app
+            object on the user's module.
+
+    Returns:
+        The resolved Python object bound to ``module:attribute``.
+
+    Note:
+        Exits via :func:`sys.exit` on a malformed path or missing
+        attribute; callers do not need to handle those failures.
+    """
     if ":" not in path:
         print(f"Error: app path must be 'module:variable' (got '{path}')", file=sys.stderr)
         sys.exit(1)
@@ -365,6 +380,20 @@ def _run_management(mgmt_args: list[str]) -> None:
 
 
 def _print_routes(app, *, fmt: str = "table") -> None:
+    """Pretty-print the routes registered on *app*.
+
+    Reads ``app._routes`` (the framework's standard attribute) and
+    emits each entry's method, path, handler name, status code,
+    tags, and deprecation flag. Two output formats are supported:
+    an aligned ASCII table (default) for humans and a JSON array
+    for tooling. Apps without a ``_routes`` attribute are reported
+    as having no routes.
+
+    Args:
+        app: The Rivex application whose routes should be shown.
+        fmt: Either ``"table"`` for the human-readable summary or
+            ``"json"`` for machine-parseable output.
+    """
     routes = getattr(app, "_routes", [])
     if not routes:
         print("No routes registered.")
@@ -488,6 +517,22 @@ def _run_with_reload(app_path: str, host: str, port: int) -> None:
     # are NEVER interpolated into the Python source string.
 
     def _scan_mtimes(dirs: list[str]) -> dict[str, float]:
+        """Return a ``{file_path: mtime}`` map for every ``.py`` file under *dirs*.
+
+        Skips noisy build/VCS directories (``__pycache__``,
+        ``.git``, ``node_modules``, ``.venv``, ``venv``,
+        ``.tox``) so spurious changes do not trigger reloads. Files
+        that disappear between walk and stat are silently ignored
+        rather than aborting the scan.
+
+        Args:
+            dirs: List of directory roots to walk. Walked
+                recursively.
+
+        Returns:
+            Mapping from absolute file path to its last-modified
+            time as a POSIX timestamp.
+        """
         mtimes: dict[str, float] = {}
         skip = {"__pycache__", ".git", "node_modules", ".venv", "venv", ".tox"}
         for d in dirs:

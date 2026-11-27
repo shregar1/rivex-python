@@ -6,7 +6,7 @@ import time
 from datetime import datetime, timezone
 from typing import Any
 
-from rivex.core._compat import client_ip, get_request_header
+from rivex.native._compat import client_ip, get_request_header
 from rivex.middleware.middleware import Middleware
 
 
@@ -19,6 +19,24 @@ class JSONFormatter(logging.Formatter):
         self.extra_fields = extra_fields or {}
 
     def format(self, record: logging.LogRecord) -> str:
+        """Render a :class:`logging.LogRecord` as a single-line JSON string.
+
+        Always emits ``level``, ``message`` and ``logger``. Adds
+        ``timestamp`` (ISO-8601, UTC) when :attr:`include_timestamp`
+        is true, then merges any custom attributes attached to the
+        record (``record.__dict__`` minus the standard
+        :class:`logging.LogRecord` fields) and the formatter's
+        :attr:`extra_fields`. Non-JSON-serializable values fall back
+        to ``str`` via ``json.dumps(..., default=str)``.
+
+        Args:
+            record: The log record produced by the standard logging
+                module.
+
+        Returns:
+            A single-line JSON string ready to be written to a stream
+            or file.
+        """
         data: dict[str, Any] = {
             "level": record.levelname.lower(),
             "message": record.getMessage(),
@@ -49,22 +67,39 @@ class StructuredLogger:
             self._logger.addHandler(handler)
 
     def _log(self, level: int, msg: str, **context: Any) -> None:
+        """Forward ``msg`` to the underlying logger at ``level`` with structured context.
+
+        ``context`` is copied into the ``extra`` mapping so the
+        :class:`JSONFormatter` can serialize it as top-level JSON
+        fields.
+
+        Args:
+            level: A :mod:`logging` level constant.
+            msg: The human-readable log message.
+            **context: Arbitrary key/value pairs to attach to the
+                record.
+        """
         extra = {k: v for k, v in context.items()}
         self._logger.log(level, msg, extra=extra)
 
     def debug(self, msg: str, **ctx: Any) -> None:
+        """Emit a DEBUG-level log record with optional structured context."""
         self._log(logging.DEBUG, msg, **ctx)
 
     def info(self, msg: str, **ctx: Any) -> None:
+        """Emit an INFO-level log record with optional structured context."""
         self._log(logging.INFO, msg, **ctx)
 
     def warning(self, msg: str, **ctx: Any) -> None:
+        """Emit a WARNING-level log record with optional structured context."""
         self._log(logging.WARNING, msg, **ctx)
 
     def error(self, msg: str, **ctx: Any) -> None:
+        """Emit an ERROR-level log record with optional structured context."""
         self._log(logging.ERROR, msg, **ctx)
 
     def critical(self, msg: str, **ctx: Any) -> None:
+        """Emit a CRITICAL-level log record with optional structured context."""
         self._log(logging.CRITICAL, msg, **ctx)
 
 
@@ -76,6 +111,25 @@ class StructuredAccessLogMiddleware(Middleware):
         self.include_headers = include_headers
 
     async def process(self, request_data, call_next):
+        """Time the downstream chain and emit one access-log line per request.
+
+        Captures the wall-clock start, awaits the rest of the
+        middleware chain, computes the elapsed duration, and writes a
+        single :class:`StructuredLogger` ``info`` entry with the
+        request method, path, status, duration, client IP and user
+        agent. When :attr:`include_headers` is set the request
+        headers are added to the payload as ``request_headers``. The
+        downstream response is returned unmodified.
+
+        Args:
+            request_data: The in-flight request envelope. ``method``,
+                ``path`` and ``headers`` are read for the log line.
+            call_next: Awaitable returning the downstream response
+                dict; its ``status`` is read for the log line.
+
+        Returns:
+            The downstream response dict, unchanged.
+        """
         start = time.monotonic()
         response = await call_next(request_data)
         duration_ms = (time.monotonic() - start) * 1000

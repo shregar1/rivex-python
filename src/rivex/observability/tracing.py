@@ -4,7 +4,7 @@ import time
 import uuid
 from typing import Any
 
-from rivex.core._compat import get_request_header
+from rivex.native._compat import get_request_header
 from rivex.middleware.middleware import Middleware
 
 
@@ -22,20 +22,54 @@ class Span:
         self.status: str = "ok"
 
     def set_attribute(self, key: str, value: Any) -> None:
+        """Attach or overwrite an attribute on this span.
+
+        Args:
+            key: Attribute name (will appear in exporters as-is).
+            value: Any JSON-serializable value. Converted via ``str`` by
+                the OpenTelemetry exporter.
+        """
         self.attributes[key] = value
 
     def set_status(self, status: str) -> None:
+        """Set the span's outcome label.
+
+        Conventional values are ``"ok"`` (the default) and
+        ``"error"``; the value is forwarded verbatim to exporters.
+
+        Args:
+            status: Status string to record.
+        """
         self.status = status
 
     def end(self) -> None:
+        """Mark the span as finished by stamping :attr:`end_time`."""
         self.end_time = time.monotonic()
 
     @property
     def duration_ms(self) -> float:
+        """Return the elapsed span duration in milliseconds.
+
+        If the span has not been :meth:`end`-ed yet, the current
+        monotonic clock is used so callers always see a non-negative
+        duration.
+
+        Returns:
+            The wall-clock duration in milliseconds.
+        """
         end = self.end_time or time.monotonic()
         return (end - self.start_time) * 1000
 
     def to_dict(self) -> dict[str, Any]:
+        """Serialize the span into a JSON-friendly dict.
+
+        Includes the trace/span identifiers, name, start time,
+        duration, status, and all collected attributes. The parent
+        span id is only included when one was set.
+
+        Returns:
+            A dict suitable for logging or forwarding to an exporter.
+        """
         d: dict[str, Any] = {
             "trace_id": self.trace_id,
             "span_id": self.span_id,
@@ -54,6 +88,14 @@ class SpanExporter:
     """Base exporter. Subclass to send spans to Jaeger/Zipkin/OTEL collector."""
 
     def export(self, spans: list[Span]) -> None:
+        """Forward a batch of finished spans to the underlying backend.
+
+        The base implementation is a no-op; subclasses override this
+        to ship spans to a real tracing backend (OTel, Jaeger, Zipkin).
+
+        Args:
+            spans: Finished spans in export order.
+        """
         pass
 
 
@@ -61,6 +103,13 @@ class ConsoleSpanExporter(SpanExporter):
     """Prints spans to console as JSON."""
 
     def export(self, spans):
+        """Print each span as a single-line JSON object to stdout.
+
+        Args:
+            spans: Spans to emit; each is converted via
+                :meth:`Span.to_dict` and ``json.dumps(..., default=str)``
+                so non-serializable attribute values are coerced.
+        """
         import json
 
         for span in spans:
@@ -84,6 +133,19 @@ class OTelSpanExporter(SpanExporter):
             pass
 
     def export(self, spans: list[Span]) -> None:
+        """Replay each :class:`Span` into the OpenTelemetry SDK.
+
+        Opens a current span on the configured OpenTelemetry tracer
+        with the Rivex span's ``http.method`` + ``http.path`` as the
+        span name (when present) and copies all attributes through.
+        The status is mapped to ``StatusCode.OK`` or ``StatusCode.ERROR``
+        based on the Rivex span's ``"ok"``/``"error"`` label.
+
+        When the OpenTelemetry SDK is not importable, this is a no-op.
+
+        Args:
+            spans: The :class:`Span` objects to export.
+        """
         if self._tracer is None:
             return
         from opentelemetry import trace
@@ -123,6 +185,31 @@ class TracingMiddleware(Middleware):
         self.propagate = propagate
 
     async def process(self, request_data, call_next):
+        """Wrap a request in a :class:`Span` and propagate trace context.
+
+        Parses the incoming ``traceparent`` header to honor upstream
+        trace ids; otherwise mints fresh ids. Stamps the span on
+        ``request_data`` under ``_span`` so downstream handlers can
+        read it, records the response status, ends the span, exports
+        it, and (when propagation is enabled) adds ``traceparent`` and
+        ``x-trace-id`` to the response headers. Exceptions are
+        captured with status ``"error"`` and re-raised.
+
+        Args:
+            request_data: The in-flight request envelope. ``method``
+                and ``path`` are read for span naming; the span is
+                attached as ``_span`` before delegation.
+            call_next: Awaitable returning the downstream response
+                dict.
+
+        Returns:
+            The downstream response dict, possibly augmented with
+            trace headers.
+
+        Raises:
+            Exception: Re-raises whatever the downstream chain raised
+                after marking the span as errored.
+        """
         traceparent = get_request_header(request_data, "traceparent") or ""
         trace_id, parent_span_id = self._parse_traceparent(traceparent)
         if not trace_id:

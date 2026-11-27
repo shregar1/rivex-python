@@ -26,7 +26,7 @@ class IResponseDto(IDto, ApplicationBaseModel, ABC):
         return cls.model_validate(data)
 
 
-class ApiResponseStatus(StrEnum):
+class APIResponseStatus(StrEnum):
     SUCCESS = "SUCCESS"
     FAILED = "FAILED"
 
@@ -36,7 +36,7 @@ def new_transaction_urn(*, kind: str = "txn") -> str:
     return f"urn:{{project_slug}}:{kind}:{time.time_ns()}"
 
 
-class ApiEnvelopeResponse(IResponseDto):
+class APIEnvelopeResponse(IResponseDto):
     """Standard success/error envelope returned by the {{project_name}} API."""
 
     transaction_urn: str = Field(alias="transactionUrn")
@@ -75,7 +75,7 @@ class ApiEnvelopeResponse(IResponseDto):
             payload = data
         return cls(
             transaction_urn=transaction_urn or new_transaction_urn(kind="txn"),
-            status=ApiResponseStatus.SUCCESS,
+            status=APIResponseStatus.SUCCESS,
             response_message=response_message,
             response_key=response_key,
             errors=[],
@@ -100,7 +100,7 @@ class ApiEnvelopeResponse(IResponseDto):
         error_items = list(errors or [{"message": response_message, "code": response_key}])
         return cls(
             transaction_urn=transaction_urn or new_transaction_urn(kind="err"),
-            status=ApiResponseStatus.FAILED,
+            status=APIResponseStatus.FAILED,
             response_message=response_message,
             response_key=response_key,
             errors=error_items,
@@ -137,7 +137,7 @@ class ApiEnvelopeResponse(IResponseDto):
 
 
 def envelope_http_response(
-    envelope: ApiEnvelopeResponse,
+    envelope: APIEnvelopeResponse,
     *,
     status_code: int,
     extra_headers: list[tuple[str, str]] | None = None,

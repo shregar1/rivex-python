@@ -3,8 +3,8 @@ from __future__ import annotations
 import inspect
 from typing import Any, get_type_hints
 
-from rivex.core._compat import HAS_CORE
-from rivex.core._compat import rc as _rc
+from rivex.native._compat import HAS_CORE
+from rivex.native._compat import rc as _rc
 
 
 def generate_openapi(
@@ -19,6 +19,32 @@ def generate_openapi(
     contact: dict[str, Any] | None = None,
     license_info: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    """Build an OpenAPI 3.1.0 spec dict from a list of Rivex routes.
+
+    Iterates ``routes`` (skipping those with ``include_in_schema=False``),
+    builds the per-operation object for each path/method, and
+    aggregates any referenced body models into ``components.schemas``.
+    OpenAPI metadata (``info``, ``servers``, ``tags``) is populated
+    from the matching keyword arguments; absent optional fields are
+    simply omitted. When every route is excluded a :mod:`warnings`
+    warning is emitted so an empty spec is not silently produced.
+
+    Args:
+        title: API title (``info.title``).
+        version: API version (``info.version``).
+        description: Optional long description (``info.description``).
+        routes: List of Rivex route records to include in the spec.
+        openapi_tags: Optional explicit tag definitions; when omitted
+            the union of ``route.tags`` is used.
+        servers: Optional list of server entries (``servers``).
+        terms_of_service: Optional URL for ``info.termsOfService``.
+        contact: Optional ``info.contact`` object.
+        license_info: Optional ``info.license`` object.
+
+    Returns:
+        The OpenAPI specification as a dict ready to be serialised as
+        JSON. May be empty if no routes are included.
+    """
     spec: dict[str, Any] = {
         "openapi": "3.1.0",
         "info": {"title": title, "version": version},
@@ -39,12 +65,14 @@ def generate_openapi(
     components_schemas: dict[str, Any] = {}
     security_schemes: dict[str, Any] = {}
 
+    skipped = 0
     for route in routes:
         if not route.include_in_schema:
+            skipped += 1
             continue
 
         path_key = route.path
-        method_key = route.method.lower()
+        method_key = route.method.lower() if route.method else ""
 
         if path_key not in paths:
             paths[path_key] = {}
@@ -54,6 +82,15 @@ def generate_openapi(
 
         for tag in route.tags:
             all_tags.add(tag)
+
+    if skipped and not paths:
+        import warnings
+
+        warnings.warn(
+            f"generate_openapi: all {skipped} route(s) have include_in_schema=False; "
+            "spec will have no paths.",
+            stacklevel=2,
+        )
 
     if paths:
         spec["paths"] = paths
@@ -79,7 +116,30 @@ def _build_operation(
     components_schemas: dict,
     security_schemes: dict[str, Any],
 ) -> dict[str, Any]:
-    from rivex.core.dependencies import Depends
+    """Build the per-operation OpenAPI object for a single route.
+
+    Inspects the route's handler signature, walks the parameters, and
+    produces ``parameters`` (path/query/header/cookie), ``requestBody``
+    (body model or form), and ``responses`` (the default success entry
+    plus any extras declared on the route) objects. Security
+    requirements are collected from ``Depends`` providers that expose
+    an ``openapi_scheme`` attribute. ``components_schemas`` and
+    ``security_schemes`` are mutated in place to accumulate
+    cross-operation data.
+
+    Args:
+        route: The Rivex route record to render.
+        components_schemas: Shared dict that will become
+            ``components.schemas``; body models are added here.
+        security_schemes: Shared dict that will become
+            ``components.securitySchemes``; schemes referenced via
+            ``Depends`` are added here.
+
+    Returns:
+        The OpenAPI operation object ready to be placed under
+        ``paths[path][method]``.
+    """
+    from rivex.di.dependencies import Depends
 
     op: dict[str, Any] = {}
 
@@ -119,12 +179,12 @@ def _build_operation(
     request_body = None
     security_requirements: list[dict[str, list[str]]] = []
 
-    from rivex.core.params import Body as BodyParam
-    from rivex.core.params import Cookie as CookieParam
-    from rivex.core.params import Header as HeaderParam
-    from rivex.core.params import Path as PathParam
-    from rivex.core.params import Query as QueryParam
-    from rivex.core.params import _ParamBase
+    from rivex.di.params import Body as BodyParam
+    from rivex.di.params import Cookie as CookieParam
+    from rivex.di.params import Header as HeaderParam
+    from rivex.di.params import Path as PathParam
+    from rivex.di.params import Query as QueryParam
+    from rivex.di.params import _ParamBase
 
     for name, param in sig.parameters.items():
         hint = hints.get(name, str)
@@ -295,6 +355,22 @@ def _collect_security_requirement(
     security_schemes: dict[str, Any],
     requirements: list[dict[str, list[str]]],
 ) -> None:
+    """Record the security scheme of a dependency for the current operation.
+
+    If ``dependency`` exposes an ``openapi_scheme`` attribute, the
+    scheme is added to ``security_schemes`` (keyed by ``scheme_name``
+    or the class name) and a corresponding ``{name: []}`` entry is
+    appended to ``requirements``. No-op when the dependency does not
+    declare a security scheme.
+
+    Args:
+        dependency: The provider bound to a ``Depends`` marker on the
+            route handler.
+        security_schemes: Shared dict that will become
+            ``components.securitySchemes``; mutated in place.
+        requirements: Per-operation list of security requirements;
+            appended to in place.
+    """
     scheme = getattr(dependency, "openapi_scheme", None)
     if not scheme:
         return
@@ -304,6 +380,15 @@ def _collect_security_requirement(
 
 
 def _extract_path_params(path: str) -> set[str]:
+    """Return the set of ``{name}`` placeholders in a path template.
+
+    Args:
+        path: The path template, e.g. ``"/users/{user_id}/items/{id}"``.
+
+    Returns:
+        A set of placeholder names (e.g. ``{"user_id", "id"}``) in
+        the order they first appear in the path.
+    """
     params: set[str] = set()
     for segment in path.split("/"):
         if segment.startswith("{") and segment.endswith("}"):
@@ -312,6 +397,19 @@ def _extract_path_params(path: str) -> set[str]:
 
 
 def _type_to_schema(hint: Any) -> dict[str, Any]:
+    """Translate a Python type hint to a minimal OpenAPI schema fragment.
+
+    Maps the JSON-relevant primitives (``int``, ``float``, ``str``,
+    ``bool``, ``list``) to their OpenAPI equivalents. Any other hint
+    — including complex generics, custom classes, and ``Any`` —
+    falls back to ``{"type": "string"}`` so the spec still builds.
+
+    Args:
+        hint: The type hint to translate.
+
+    Returns:
+        A dict shaped like ``{"type": "<openapi-type>"}``.
+    """
     if hint is int:
         return {"type": "integer"}
     if hint is float:
@@ -326,6 +424,28 @@ def _type_to_schema(hint: Any) -> dict[str, Any]:
 
 
 def _model_to_ref(model: Any, components: dict) -> dict[str, Any]:
+    """Build a ``$ref``-style schema for a body model and register it.
+
+    For container types (``list``/``set``/``frozenset``/``tuple``)
+    with one type argument, builds an ``{"type": "array",
+    "items": ...}`` schema and recurses on the element type. For
+    Pydantic-style models (anything exposing ``model_json_schema``),
+    looks up the model by name in ``components``; on first
+    encounter the JSON schema is stored, with ``$defs`` flattened
+    into the components dict. Falls back to ``{"type": "object"}``
+    when neither rule matches.
+
+    Args:
+        model: The body model class, container, or other schema source.
+        components: Shared dict that will become
+            ``components.schemas``; mutated in place to register the
+            model on first use.
+
+    Returns:
+        A dict shaped like ``{"$ref": "#/components/schemas/<Name>"}``
+        for models, an array schema for containers, or a generic
+        object schema otherwise.
+    """
     from typing import get_args, get_origin
 
     origin = get_origin(model)
@@ -347,8 +467,24 @@ def _model_to_ref(model: Any, components: dict) -> dict[str, Any]:
 
 
 def _is_request_type(hint: Any) -> bool:
+    """Return ``True`` when ``hint`` is the Rivex :class:`Request` class.
+
+    Args:
+        hint: The candidate type hint.
+
+    Returns:
+        ``True`` if ``hint`` is exactly :class:`Request` or a
+        subclass; ``False`` otherwise (including when the
+        ``rivex.http.requests`` module cannot be imported).
+    """
     try:
-        from rivex.core.requests import Request
+        from rivex.http.requests import Request
+
+        return hint is Request or (isinstance(hint, type) and issubclass(hint, Request))
+    except (TypeError, ImportError):
+        return False
+    try:
+        from rivex.http.requests import Request
 
         return hint is Request or (isinstance(hint, type) and issubclass(hint, Request))
     except (TypeError, ImportError):
@@ -356,6 +492,27 @@ def _is_request_type(hint: Any) -> bool:
 
 
 def _is_body_model(hint: Any) -> bool:
+    """Return ``True`` if ``hint`` is a body-model class for OpenAPI rendering.
+
+    A body model is any class exposing a ``model_validate_json``
+    method (Pydantic v2 style) or, when Pydantic is installed, a
+    subclass of :class:`pydantic.BaseModel`.
+
+    Args:
+        hint: The candidate type hint.
+
+    Returns:
+        ``True`` if ``hint`` is a body-model class, ``False``
+        otherwise.
+    """
+    if hasattr(hint, "model_validate_json"):
+        return True
+    try:
+        from pydantic import BaseModel
+
+        return isinstance(hint, type) and issubclass(hint, BaseModel)
+    except (TypeError, ImportError):
+        return False
     if hasattr(hint, "model_validate_json"):
         return True
     try:
@@ -367,6 +524,31 @@ def _is_body_model(hint: Any) -> bool:
 
 
 def _is_internal_type(hint: Any, default: Any) -> bool:
+    """Return ``True`` when ``hint`` is an internal Rivex type to skip in the spec.
+
+    Currently only :class:`BackgroundTasks` is recognised — the spec
+    generator skips it because the parameter is fulfilled by the
+    framework, not by the client.
+
+    Args:
+        hint: The candidate type hint.
+        default: The parameter default (unused — included for symmetry
+            with the other ``_is_*_type`` helpers).
+
+    Returns:
+        ``True`` if the type should be omitted from the generated
+        OpenAPI spec, ``False`` otherwise.
+    """
+    try:
+        from rivex.lifecycle.background import BackgroundTasks
+
+        if hint is BackgroundTasks or (
+            isinstance(hint, type) and issubclass(hint, BackgroundTasks)
+        ):
+            return True
+    except (TypeError, ImportError):
+        pass
+    return False
     try:
         from rivex.lifecycle.background import BackgroundTasks
 
@@ -380,6 +562,29 @@ def _is_internal_type(hint: Any, default: Any) -> bool:
 
 
 def _is_file_type(hint: Any, default: Any) -> bool:
+    """Return ``True`` when ``hint`` is a file upload for OpenAPI rendering.
+
+    Triggers on either a :class:`File` default value or a parameter
+    annotated as :class:`UploadFile` (or a subclass).
+
+    Args:
+        hint: The candidate type hint.
+        default: The parameter default; checked for ``File``.
+
+    Returns:
+        ``True`` if the parameter represents a file upload, ``False``
+        otherwise.
+    """
+    try:
+        from rivex.web.uploads import File, UploadFile
+
+        if isinstance(default, File):
+            return True
+        if hint is UploadFile or (isinstance(hint, type) and issubclass(hint, UploadFile)):
+            return True
+    except (TypeError, ImportError):
+        pass
+    return False
     try:
         from rivex.web.uploads import File, UploadFile
 
@@ -393,6 +598,22 @@ def _is_file_type(hint: Any, default: Any) -> bool:
 
 
 def _is_form_type(default: Any) -> bool:
+    """Return ``True`` when ``default`` is a :class:`Form` marker.
+
+    Args:
+        default: The parameter default to test.
+
+    Returns:
+        ``True`` if the default is an instance of :class:`Form`,
+        ``False`` otherwise (including when the ``rivex.web.uploads``
+        module cannot be imported).
+    """
+    try:
+        from rivex.web.uploads import Form
+
+        return isinstance(default, Form)
+    except (TypeError, ImportError):
+        return False
     try:
         from rivex.web.uploads import Form
 
@@ -410,6 +631,50 @@ def build_docs_html(
     app_name: str | None = None,
     powered_by: str | None = None,
 ) -> str:
+    """Render the HTML for the interactive API docs landing page.
+
+    Tries, in order: the optional ``rivex_react`` package, the native
+    Rust ``render_docs_html`` helper, and finally a self-contained
+    pure-Python/Alpine.js fallback. The page loads ``openapi_url`` to
+    render the live spec.
+
+    Args:
+        title: Page title shown in the browser tab and header.
+        openapi_url: URL the page fetches the OpenAPI JSON from.
+        logo_url: Optional URL of a logo image to display.
+        description: Optional page description used by the React
+            renderer.
+        favicon_url: Optional URL of the favicon.
+        app_name: Optional application name (used by the fallback to
+            render the brand mark and attribution).
+        powered_by: Optional "powered by" string for the fallback.
+
+    Returns:
+        A complete HTML document as a string.
+    """
+    try:
+        from rivex_react import render_react_docs
+
+        return render_react_docs(
+            openapi_url,
+            title=title,
+            description=description,
+            favicon_url=favicon_url,
+            logo_url=logo_url,
+        )
+    except ImportError:
+        pass
+
+    if HAS_CORE:
+        result: str = _rc.render_docs_html(
+            title,
+            openapi_url,
+            logo_url=logo_url,
+            description=description,
+            favicon_url=favicon_url,
+        )
+        return result
+    return _fallback_docs_html(title, openapi_url, app_name=app_name, powered_by=powered_by)
     try:
         from rivex_react import render_react_docs
 
@@ -442,6 +707,34 @@ def build_redoc_html(
     app_name: str | None = None,
     powered_by: str | None = None,
 ) -> str:
+    """Render the HTML for the ReDoc API reference page.
+
+    Prefers the native Rust ``render_redoc_html`` helper when the
+    core extension is available, and falls back to a minimal
+    self-contained page that mounts the ReDoc web component against
+    ``openapi_url``.
+
+    Args:
+        title: Page title shown in the browser tab.
+        openapi_url: URL the page fetches the OpenAPI JSON from.
+        favicon_url: Optional URL of the favicon (used by the native
+            renderer).
+        app_name: Optional application name (unused by the native
+            renderer; reserved for the fallback).
+        powered_by: Optional "powered by" string (unused by the
+            native renderer; reserved for the fallback).
+
+    Returns:
+        A complete HTML document as a string.
+    """
+    if HAS_CORE:
+        result: str = _rc.render_redoc_html(
+            title,
+            openapi_url,
+            favicon_url=favicon_url,
+        )
+        return result
+    return _fallback_redoc_html(title, openapi_url)
     if HAS_CORE:
         result: str = _rc.render_redoc_html(
             title,
@@ -460,6 +753,39 @@ def build_health_html(
     app_name: str | None = None,
     powered_by: str | None = None,
 ) -> str:
+    """Render the HTML for the operational health/landing page.
+
+    Prefers the native Rust ``render_health_html`` helper when the
+    core extension is available, and falls back to a self-contained
+    page that shows the brand mark, a pulsing operational status
+    indicator, an uptime counter, and a docs link.
+
+    Args:
+        title: Page title shown in the browser tab and info drawer.
+        version: Service version shown in the info drawer.
+        docs_url: Optional URL the page links to as the docs entry.
+        favicon_url: Optional URL of the favicon.
+        app_name: Optional application name for the brand mark.
+        powered_by: Optional "powered by" string.
+
+    Returns:
+        A complete HTML document as a string.
+    """
+    if HAS_CORE:
+        result: str = _rc.render_health_html(
+            title,
+            version,
+            docs_url=docs_url,
+            favicon_url=favicon_url,
+        )
+        return result
+    return _fallback_health_html(
+        title,
+        version,
+        docs_url,
+        app_name=app_name,
+        powered_by=powered_by,
+    )
     if HAS_CORE:
         result: str = _rc.render_health_html(
             title,
@@ -696,6 +1022,23 @@ def _fallback_docs_html(
     app_name: str | None = None,
     powered_by: str | None = None,
 ) -> str:
+    """Render the pure-Python fallback for the interactive docs page.
+
+    Used when neither ``rivex_react`` nor the native Rust renderer is
+    available. The output is a single self-contained HTML document
+    using Alpine.js to render the spec from ``openapi_url`` on the
+    client.
+
+    Args:
+        title: Page title.
+        openapi_url: URL the page fetches the OpenAPI JSON from.
+        app_name: Optional application name for the brand mark.
+        powered_by: Optional "powered by" string.
+
+    Returns:
+        A complete HTML document as a string.
+    """
+    from html import escape
     from html import escape
 
     t, u = escape(title), escape(openapi_url)
@@ -1271,6 +1614,20 @@ function docsPage() {{
 
 
 def _fallback_redoc_html(title: str, openapi_url: str) -> str:
+    """Render the minimal ReDoc fallback page.
+
+    Used when the native Rust renderer is unavailable. Produces a
+    single-page document that mounts the public ReDoc web component
+    against ``openapi_url``.
+
+    Args:
+        title: Page title shown in the browser tab.
+        openapi_url: URL the page fetches the OpenAPI JSON from.
+
+    Returns:
+        A complete HTML document as a string.
+    """
+    from html import escape
     from html import escape
 
     t, u = escape(title), escape(openapi_url)
@@ -1290,6 +1647,23 @@ def _fallback_health_html(
     app_name: str | None = None,
     powered_by: str | None = None,
 ) -> str:
+    """Render the pure-Python fallback for the health/landing page.
+
+    Used when the native Rust renderer is unavailable. Produces a
+    self-contained page with the brand mark, operational status
+    indicator, uptime counter, info drawer, and theme toggle.
+
+    Args:
+        title: Page title.
+        version: Service version shown in the info drawer.
+        docs_url: Optional URL the page links to as the docs entry.
+        app_name: Optional application name for the brand mark.
+        powered_by: Optional "powered by" string.
+
+    Returns:
+        A complete HTML document as a string.
+    """
+    from html import escape
     from html import escape
 
     t, v = escape(title), escape(version)
@@ -1352,6 +1726,28 @@ def _fallback_admin_html(
     version: str,
     partials: list[dict[str, str]],
 ) -> str:
+    """Render the pure-Python fallback for the admin dashboard shell.
+
+    Used by :func:`build_admin_html` (no native renderer is involved
+    here — the admin shell is a single static document). Builds a
+    sidebar with one entry per ``partials`` entry and an HTMX
+    ``#admin-panel`` target that loads the first partial on mount.
+
+    Args:
+        title: Page title shown in the browser tab.
+        base_path: URL prefix for admin routes (``/admin`` by default).
+        static_url: URL prefix for static assets (Alpine.js, htmx).
+        app_name: Application name shown in the brand mark.
+        powered_by: "Powered by" string shown under the brand.
+        version: Service version shown in the sidebar footer.
+        partials: List of ``{"name", "title", "icon"}`` dicts
+            describing the sidebar entries and their target
+            partials.
+
+    Returns:
+        A complete HTML document as a string.
+    """
+    from html import escape
     from html import escape
 
     brand = _brand_mark(app_name)

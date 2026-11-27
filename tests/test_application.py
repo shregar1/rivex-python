@@ -3,8 +3,8 @@ import json
 import pytest
 
 from rivex import Controller, HTTPException, Rivex, Router, get
-from rivex.core._injection import build_handler_wrapper
-from rivex.core.responses import JSONResponse
+from rivex.di._injection import build_handler_wrapper
+from rivex.http.responses import JSONResponse
 
 
 def test_app_init_defaults():

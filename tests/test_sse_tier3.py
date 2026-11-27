@@ -2,7 +2,7 @@
 
 Coverage:
 
-- SseEvent dataclass formats correctly
+- SSEEvent dataclass formats correctly
 - @app.sse() decorator registers and serves streaming events
 - Multiple events can be streamed
 - EventSourceResponse works end-to-end
@@ -16,8 +16,8 @@ from typing import Any
 import pytest
 
 import rivex
-from rivex.core.responses import EventSourceResponse
-from rivex.protocols.sse import SseEvent
+from rivex.http.responses import EventSourceResponse
+from rivex.protocols.sse import SSEEvent
 
 
 def _free_port() -> int:
@@ -56,38 +56,38 @@ def _start_server(app: rivex.Rivex) -> int:
     raise RuntimeError(f"server did not start (last tried port {last_port})")
 
 
-# ── SseEvent formatting ────────────────────────────────────────────
+# ── SSEEvent formatting ────────────────────────────────────────────
 
 
-class TestSseEvent:
+class TestSSEEvent:
     def test_data_only(self) -> None:
-        ev = SseEvent(data="hello")
+        ev = SSEEvent(data="hello")
         result = ev._format()
         assert "data: hello" in result
         assert result.endswith("\n\n")
 
     def test_data_and_event(self) -> None:
-        ev = SseEvent(data="update", event="status")
+        ev = SSEEvent(data="update", event="status")
         result = ev._format()
         assert "event: status" in result
         assert "data: update" in result
 
     def test_with_id_and_retry(self) -> None:
-        ev = SseEvent(data="msg", id="42", retry=3000)
+        ev = SSEEvent(data="msg", id="42", retry=3000)
         result = ev._format()
         assert "id: 42" in result
         assert "retry: 3000" in result
         assert "data: msg" in result
 
     def test_json_encoding(self) -> None:
-        ev = SseEvent(data={"key": "value"}, json=True)
+        ev = SSEEvent(data={"key": "value"}, json=True)
         result = ev._format()
         assert "data: " in result
         assert '"key"' in result
         assert '"value"' in result
 
     def test_multiline_data(self) -> None:
-        ev = SseEvent(data="line1\nline2")
+        ev = SSEEvent(data="line1\nline2")
         result = ev._format()
         assert "data: line1" in result
         assert "data: line2" in result
@@ -131,7 +131,7 @@ def test_sse_streams_single_event() -> None:
 
     @app.sse("/events")
     async def events():
-        yield SseEvent(data="hello")
+        yield SSEEvent(data="hello")
 
     port = _free_port()
     port = _start_server(app)
@@ -145,8 +145,8 @@ def test_sse_streams_multiple_events() -> None:
 
     @app.sse("/multi")
     async def multi():
-        yield SseEvent(data="first")
-        yield SseEvent(data="second", event="update", id="1")
+        yield SSEEvent(data="first")
+        yield SSEEvent(data="second", event="update", id="1")
 
     port = _free_port()
     port = _start_server(app)
@@ -164,7 +164,7 @@ def test_sse_returns_correct_headers() -> None:
 
     @app.sse("/h")
     async def h():
-        yield SseEvent(data="ok")
+        yield SSEEvent(data="ok")
 
     port = _free_port()
     port = _start_server(app)
@@ -183,7 +183,7 @@ def test_sse_works_alongside_normal_routes() -> None:
 
     @app.sse("/events")
     async def events():
-        yield SseEvent(data="ping")
+        yield SSEEvent(data="ping")
 
     port = _free_port()
     port = _start_server(app)
@@ -202,7 +202,7 @@ def test_sse_with_path_param() -> None:
 
     @app.sse("/stream/{topic}")
     async def stream(topic: str):
-        yield SseEvent(data=f"subscribed to {topic}")
+        yield SSEEvent(data=f"subscribed to {topic}")
 
     port = _free_port()
     port = _start_server(app)
@@ -216,7 +216,7 @@ def test_sse_path_param_not_found() -> None:
 
     @app.sse("/stream/{topic}")
     async def stream(topic: str):
-        yield SseEvent(data=topic)
+        yield SSEEvent(data=topic)
 
     port = _free_port()
     port = _start_server(app)
@@ -235,7 +235,7 @@ def test_sse_long_stream() -> None:
     @app.sse("/long")
     async def long():
         for i in range(100):
-            yield SseEvent(data=str(i), id=str(i))
+            yield SSEEvent(data=str(i), id=str(i))
 
     port = _free_port()
     port = _start_server(app)
@@ -253,7 +253,7 @@ def test_sse_custom_response_headers() -> None:
 
     @app.get("/custom-sse")
     async def custom_sse():
-        content = iter([SseEvent(data="hello")._format()])
+        content = iter([SSEEvent(data="hello")._format()])
         resp = EventSourceResponse(content=content, headers={"X-Custom": "yes"})
         return resp
 

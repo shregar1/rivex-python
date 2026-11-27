@@ -25,7 +25,7 @@ Supported types
 * ``Optional[T]`` / ``X | None`` / ``Union[…]``
 * tagged unions — ``Annotated[A | B, Discriminator("kind")]``
 * nested ``Schema`` subclasses
-* pydantic specials — ``pydantic.HttpUrl``, ``EmailStr``,
+* pydantic specials — ``pydantic.HTTPUrl``, ``EmailStr``,
   ``IPvAnyAddress``, ``SecretStr``, ``SecretBytes``, ``Json[T]``,
   ``AwareDatetime``, ``NaiveDatetime``, ``PastDate``, ``FutureDate``
   (delegated to pydantic's ``TypeAdapter`` so they "just work")
@@ -228,6 +228,22 @@ class Field:
         self.json_schema_extra = json_schema_extra
 
     def _apply_numeric(self, schema: Any) -> Any:
+        """Copy numeric constraint attributes onto *schema* in place.
+
+        Iterates the supported JSON-Schema numeric keys (``ge``,
+        ``le``, ``gt``, ``lt``, ``multiple_of``) and writes the
+        non-``None`` ones onto the supplied schema dict. The
+        ``allow_inf_nan`` flag is added when explicitly set, since
+        it is opt-in. The schema is mutated and returned for
+        fluent chaining.
+
+        Args:
+            schema: The mutable schema dict to update.
+
+        Returns:
+            The same ``schema`` instance, with numeric constraints
+            added.
+        """
         for k in ("ge", "le", "gt", "lt", "multiple_of"):
             v = getattr(self, k)
             if v is not None:
@@ -237,6 +253,20 @@ class Field:
         return schema
 
     def _apply_decimal(self, schema: Any) -> Any:
+        """Copy numeric and decimal-specific constraints onto *schema*.
+
+        Calls :meth:`_apply_numeric` first to share the common
+        range constraints, then layers the decimal-specific
+        ``decimal_places`` and ``max_digits`` keys on top when set.
+        The schema is mutated in place and returned for chaining.
+
+        Args:
+            schema: The mutable schema dict to update.
+
+        Returns:
+            The same ``schema`` instance with decimal constraints
+            merged in.
+        """
         schema = self._apply_numeric(schema)
         if self.decimal_places is not None:
             schema["decimal_places"] = self.decimal_places
@@ -245,6 +275,19 @@ class Field:
         return schema
 
     def _apply_string(self, schema: Any) -> Any:
+        """Copy string constraint attributes onto *schema* in place.
+
+        Writes ``min_length``, ``max_length``, and ``pattern`` when
+        set. Used for the ``str`` / ``SecretStr`` / ``EmailStr`` /
+        URL-style field types in the schema builder.
+
+        Args:
+            schema: The mutable schema dict to update.
+
+        Returns:
+            The same ``schema`` instance with string constraints
+            added.
+        """
         if self.min_length is not None:
             schema["min_length"] = self.min_length
         if self.max_length is not None:
@@ -254,6 +297,21 @@ class Field:
         return schema
 
     def _apply_collection(self, schema: Any) -> Any:
+        """Copy collection length constraints onto *schema* in place.
+
+        Writes the ``min_length`` / ``max_length`` keys (which
+        pydantic_core interprets as element-count bounds for
+        ``list`` / ``set`` / ``frozenset`` schemas) when set.
+        Element-type constraints are not handled here — they live
+        on the per-element schema in the caller.
+
+        Args:
+            schema: The mutable schema dict to update.
+
+        Returns:
+            The same ``schema`` instance with collection length
+            bounds added.
+        """
         if self.min_length is not None:
             schema["min_length"] = self.min_length
         if self.max_length is not None:
@@ -285,7 +343,7 @@ def _is_pydantic_json(hint: Any) -> bool:
 def _try_pydantic_native_schema(hint: Any) -> Any:
     """Ask pydantic itself for the core schema of a pydantic special type.
 
-    Used as a fallback for types like ``EmailStr`` / ``HttpUrl`` /
+    Used as a fallback for types like ``EmailStr`` / ``HTTPUrl`` /
     ``SecretStr`` / ``AwareDatetime`` where pydantic ships first-class
     handling that's tedious to reimplement here.
     """
@@ -496,6 +554,13 @@ def _annotation_to_core_schema(hint: Any) -> Any:
         target: Any = hint
 
         def _to_path(v: Any, _t: Any = target) -> Any:
+            """Convert a validated string into a ``pathlib`` path of the target subclass.
+
+            Wrapped in a default-argument trick so the ``_t``
+            closure captures the concrete ``pathlib`` subclass
+            (e.g. ``Path``, ``PurePosixPath``) rather than the
+            loop variable.
+            """
             return _t(v)
 
         return core_schema.no_info_after_validator_function(_to_path, core_schema.str_schema())
@@ -512,6 +577,13 @@ def _annotation_to_core_schema(hint: Any) -> Any:
         ip_target: Any = hint
 
         def _to_ip(v: Any, _t: Any = ip_target) -> Any:
+            """Convert a validated IP-address string into the target IP type.
+
+            ``_t`` is bound through a default argument so the
+            closure captures the concrete IP class (``IPv4Address``,
+            ``IPv6Network``, etc.) rather than the surrounding
+            loop variable.
+            """
             return _t(v)
 
         return core_schema.no_info_after_validator_function(_to_ip, core_schema.str_schema())
@@ -540,7 +612,7 @@ def _annotation_to_core_schema(hint: Any) -> Any:
         # pydantic_core but they're not exposed cleanly — fall back to
         # the Python-side type which knows how to build its own schema.
         return _try_pydantic_native_schema(hint)
-    if pydantic_type_name in ("EmailStr", "HttpUrl", "AnyUrl", "AnyHttpUrl"):
+    if pydantic_type_name in ("EmailStr", "HTTPUrl", "AnyUrl", "AnyHTTPUrl"):
         return _try_pydantic_native_schema(hint)
     if pydantic_type_name in (
         "PastDate",
@@ -952,6 +1024,15 @@ class Schema:
             post = cls.__dict__["model_post_init"]
 
             def _run_post_init(inst: Any, _p: Any = post) -> Any:
+                """Invoke the user-defined ``model_post_init`` hook on *inst*.
+
+                The ``_p`` default-argument binding ensures the
+                closure captures the bound ``model_post_init``
+                callable from the enclosing class, not the loop
+                variable. ``None`` is passed as the context
+                argument because the core schema wrapper only
+                supplies one positional value.
+                """
                 _p(inst, None)
                 return inst
 
@@ -994,12 +1075,42 @@ class Schema:
 
     @classmethod
     def model_validate_json(cls, data: bytes | str) -> Schema:
+        """Parse and validate a JSON document into a model instance.
+
+        Mirrors pydantic's ``model_validate_json`` so callers that
+        detect either framework get a working entry point. The
+        underlying validator must already be compiled; otherwise
+        a :class:`TypeError` is raised.
+
+        Args:
+            data: The JSON payload, as ``bytes`` or ``str``.
+
+        Returns:
+            A new :class:`Schema` instance populated from the
+            parsed JSON.
+        """
         if cls.__rivex_validator__ is None:
             raise TypeError(f"{cls.__name__} has no compiled schema")
         return cls.__rivex_validator__.validate_json(data)  # type: ignore[no-any-return]
 
     @classmethod
     def model_validate(cls, data: Any) -> Schema:
+        """Validate a Python ``data`` mapping into a model instance.
+
+        Mirrors pydantic's ``model_validate`` so callers that
+        detect either framework get a working entry point. The
+        input is forwarded to the compiled core-schema validator
+        which applies field-level coercion and constraint checks
+        before constructing the instance.
+
+        Args:
+            data: A Python ``dict`` (or compatible mapping) of
+                field values to validate.
+
+        Returns:
+            A new :class:`Schema` instance populated from
+            *data*.
+        """
         if cls.__rivex_validator__ is None:
             raise TypeError(f"{cls.__name__} has no compiled schema")
         return cls.__rivex_validator__.validate_python(data)  # type: ignore[no-any-return]

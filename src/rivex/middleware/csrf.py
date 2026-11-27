@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from rivex.core._compat import HAS_CORE, get_request_header, json_error_response, parse_request_cookies
-from rivex.core._compat import rc as _rc
+from rivex.native._compat import HAS_CORE, get_request_header, json_error_response, parse_request_cookies
+from rivex.native._compat import rc as _rc
 from rivex.middleware.middleware import Middleware
 
 
@@ -31,6 +31,29 @@ class CSRFMiddleware(Middleware):
         self.exempt_paths = set(exempt_paths or [])
 
     async def process(self, request_data: dict, call_next: Callable) -> dict:
+        """Run the middleware chain and enforce CSRF on unsafe methods.
+
+        On safe methods (or exempt paths), the request is passed
+        through with no checks. On every other mutating request, the
+        CSRF cookie token and the configured request header token are
+        both required and must match via :meth:`_tokens_match`; any
+        missing or mismatched pair short-circuits with a 403 via
+        :meth:`_forbidden`. After the downstream response is collected,
+        a ``Set-Cookie`` carrying a fresh CSRF token is appended when
+        the request did not already present one — that way the browser
+        has a token to echo back on the next mutating request.
+
+        Args:
+            request_data: The in-flight request envelope. The
+                ``method``, ``path``, and ``headers``/cookies are read.
+            call_next: Awaitable that invokes the next middleware /
+                handler and returns the downstream response dict.
+
+        Returns:
+            Either a 403 forbidden response when the CSRF check fails,
+            or the downstream response possibly with a ``Set-Cookie``
+            appended.
+        """
         method = request_data.get("method", "GET").upper()
         path = request_data.get("path", "/")
 
@@ -60,13 +83,47 @@ class CSRFMiddleware(Middleware):
         return response
 
     def _get_cookie_token(self, request_data: dict) -> str | None:
+        """Read the configured CSRF cookie from the request envelope.
+
+        Args:
+            request_data: The in-flight request envelope. Its cookies
+                are parsed via :func:`parse_request_cookies`.
+
+        Returns:
+            The CSRF cookie value as a string, or ``None`` when the
+            cookie is absent.
+        """
         cookies = parse_request_cookies(request_data)
         return cookies.get(self.cookie_name)
 
     def _get_header_token(self, request_data: dict) -> str | None:
+        """Read the configured CSRF header from the request envelope.
+
+        Args:
+            request_data: The in-flight request envelope. The header is
+                read via :func:`get_request_header` (case-insensitive).
+
+        Returns:
+            The CSRF header value as a string, or ``None`` when the
+            header is absent.
+        """
         return get_request_header(request_data, self.header_name)
 
     def _tokens_match(self, cookie: str, header: str) -> bool:
+        """Compare two tokens in constant time.
+
+        Prefers the Rust core's ``hmac_compare`` when available, falling
+        back to :func:`hmac.compare_digest` from the standard library.
+        Either implementation resists timing attacks.
+
+        Args:
+            cookie: The token read from the cookie.
+            header: The token read from the request header.
+
+        Returns:
+            ``True`` when both tokens are byte-equal, ``False``
+            otherwise.
+        """
         if HAS_CORE:
             result: bool = _rc.hmac_compare(cookie, header)
             return result
@@ -75,6 +132,17 @@ class CSRFMiddleware(Middleware):
         return hmac.compare_digest(cookie, header)
 
     def _generate_token(self) -> str:
+        """Generate a fresh CSRF token.
+
+        Prefers the Rust core's ``csrf_generate_token`` when available;
+        otherwise falls back to 32 random bytes from
+        :func:`secrets.token_bytes` HMAC-SHA256'd with
+        ``self.secret_key`` and hex-encoded.
+
+        Returns:
+            A new opaque token string suitable for both the cookie
+            value and the expected header value.
+        """
         if HAS_CORE:
             result: str = _rc.csrf_generate_token(self.secret_key)
             return result
@@ -87,4 +155,13 @@ class CSRFMiddleware(Middleware):
 
     @staticmethod
     def _forbidden(detail: str) -> dict:
+        """Build a 403 CSRF-rejected response via the standard error helper.
+
+        Args:
+            detail: Human-readable reason included in the error body.
+
+        Returns:
+            A 403 response dict produced by
+            :func:`json_error_response`.
+        """
         return json_error_response(403, detail)

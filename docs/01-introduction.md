@@ -9,7 +9,7 @@ Rivex is a **Rust-powered Python web framework with FastAPI-like ergonomics**. Y
 - **Familiar, FastAPI-style API.** Decorator routes (`@app.get(...)`), dependency injection with `Depends()`, Pydantic request/response models, and auto-generated OpenAPI docs. If you know FastAPI, you already know most of Rivex. The application class is even exported as `FastAPI` for drop-in muscle memory.
 - **A Rust core, not just an ASGI shim.** The server, request parsing, JSON encoding, password hashing, JWT, and a suite of validators are implemented in Rust and exposed to Python. You opt into the fast paths without leaving Python.
 - **Batteries included.** Twenty-plus production middleware (CORS, compression, rate limiting, security headers, sessions, CSRF, idempotency…), security schemes, JWT, guards, throttling, websockets, background tasks, caching, pagination, metrics, tracing, structured logging, health checks, and settings — all in the box.
-- **Two validation engines.** Use Pydantic `BaseModel` if you like, or Rivex's own lighter-weight `Schema`. They are interchangeable at the handler boundary.
+- **Two validation engines.** Use Pydantic `BaseModel` if you like, or  own lighter-weight `Schema`. They are interchangeable at the handler boundary.
 - **Native JSON generation.** The `gen` API builds large JSON payloads entirely in Rust — no intermediate Python objects — for throughput that ordinary list comprehensions can't reach.
 
 ## How a request flows

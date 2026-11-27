@@ -43,7 +43,7 @@ def test_rate_limit_key_header_fallback_to_ip():
 
 def test_rate_limit_ip_key():
     m = RateLimitMiddleware(rate=10, per=1.0)
-    from rivex.core._compat import client_ip
+    from rivex.native._compat import client_ip
     key = m._key({"headers": [("x-forwarded-for", "1.2.3.4")]})
     assert key == "1.2.3.4"
 

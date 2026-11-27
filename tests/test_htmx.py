@@ -12,7 +12,7 @@ from rivex.web.htmx import (
     HXRetarget,
     HXSwap,
 )
-from rivex.core.requests import Request
+from rivex.http.requests import Request
 
 
 def test_htmx_details_detects_htmx_request():

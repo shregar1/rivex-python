@@ -19,6 +19,14 @@ class HealthCheck:
         """Decorator to register a liveness check."""
 
         def decorator(func):
+            """Register ``func`` as the liveness check named ``name`` and return it.
+
+            Args:
+                func: The async or sync callable that performs the check.
+
+            Returns:
+                ``func`` unchanged so it remains usable in place.
+            """
             self.add_check(name, func, "liveness")
             return func
 
@@ -28,12 +36,37 @@ class HealthCheck:
         """Decorator to register a readiness check."""
 
         def decorator(func):
+            """Register ``func`` as the readiness check named ``name`` and return it.
+
+            Args:
+                func: The async or sync callable that performs the check.
+
+            Returns:
+                ``func`` unchanged so it remains usable in place.
+            """
             self.add_check(name, func, "readiness")
             return func
 
         return decorator
 
     async def _run_checks(self, check_type: str | None = None) -> dict[str, Any]:
+        """Run all registered checks of the requested type and aggregate results.
+
+        Iterates over :attr:`_checks`, invoking each one and awaiting it
+        if it returns a coroutine. Boolean results are normalized to
+        ``{"status": "ok" | "fail"}``; dict results are passed through
+        verbatim; anything else is treated as success. Exceptions
+        inside a check are recorded as failures. The overall
+        ``status`` is ``"healthy"`` only when every check succeeded.
+
+        Args:
+            check_type: ``"liveness"`` or ``"readiness"`` to scope the
+                run, or ``None`` to include every registered check.
+
+        Returns:
+            A dict of the form ``{"status": ..., "checks": {...}}``
+            suitable for serializing as the body of the health endpoint.
+        """
         results: dict[str, Any] = {}
         all_ok = True
         for name, check, ct in self._checks:
@@ -81,16 +114,34 @@ class HealthCheck:
 
         @app.get(liveness_path, include_in_schema=False)
         async def liveness_handler():
+            """Serve the liveness probe at ``liveness_path``.
+
+            Returns HTTP 200 when every liveness check passes, 503
+            otherwise, with the per-check result dict as the JSON body.
+
+            Returns:
+                A :class:`JSONResponse` with the aggregated check dict
+                and a status code of 200 or 503.
+            """
             result = await health.check_liveness()
             status = 200 if result["status"] == "healthy" else 503
-            from rivex.core.responses import JSONResponse
+            from rivex.http.responses import JSONResponse
 
             return JSONResponse(result, status_code=status)
 
         @app.get(readiness_path, include_in_schema=False)
         async def readiness_handler():
+            """Serve the readiness probe at ``readiness_path``.
+
+            Returns HTTP 200 when every readiness check passes, 503
+            otherwise, with the per-check result dict as the JSON body.
+
+            Returns:
+                A :class:`JSONResponse` with the aggregated check dict
+                and a status code of 200 or 503.
+            """
             result = await health.check_readiness()
             status = 200 if result["status"] == "healthy" else 503
-            from rivex.core.responses import JSONResponse
+            from rivex.http.responses import JSONResponse
 
             return JSONResponse(result, status_code=status)

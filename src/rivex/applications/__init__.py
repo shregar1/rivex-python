@@ -1,0 +1,1 @@
+"""rivex.applications package."""

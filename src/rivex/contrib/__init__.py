@@ -5,7 +5,7 @@ Rivex ships with two first-party server engines:
   - ``app.run_sync()``     — Rivex native sync (std::thread+httparse).
 
 This package contains *opt-in* adapters to third-party servers
-that you install separately. They're not part of Rivex's core
+that you install separately. They're not part of  core
 because they add a Python dependency the user has to opt into.
 
 Available adapters

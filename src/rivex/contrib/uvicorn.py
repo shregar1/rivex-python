@@ -1,12 +1,12 @@
 """Uvicorn adapter for Rivex.
 
 This module is an *opt-in* adapter that lets you serve a Rivex
-app via uvicorn instead of Rivex's native engines. Use it when
+app via uvicorn instead of  native engines. Use it when
 you need uvicorn-specific features (worker supervisor, ASGI
 middleware that's tightly coupled to uvicorn's lifecycle,
 ``uvloop`` integration, etc.).
 
-For best performance, use Rivex's native engine via
+For best performance, use  native engine via
 ``app.run()`` (default). The native engine serves const routes
 entirely in Rust and is 5-10x faster than the uvicorn path
 because it avoids the ASGI dispatch overhead.

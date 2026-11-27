@@ -31,6 +31,23 @@ class WebDAVMiddleware:
         self._locks: dict[str, dict] = {}
 
     def _resolve_path(self, request_path: str) -> Path | None:
+        """Translate a URL path into an absolute filesystem path inside ``self._root``.
+
+        Percent-decodes the path, joins it onto the WebDAV root, and
+        resolves ``..`` and symlinks via :meth:`Path.resolve`. The
+        resolved path must still be a descendant of ``self._root``
+        after resolution; anything that escapes (symlink target outside
+        the root, malformed request, etc.) is rejected by returning
+        ``None``.
+
+        Args:
+            request_path: The URL path (with leading slash) of the
+                incoming request.
+
+        Returns:
+            The absolute :class:`Path` to serve, or ``None`` when the
+            path would escape the configured root and must be denied.
+        """
         import urllib.parse
 
         decoded = urllib.parse.unquote(request_path)
@@ -42,6 +59,24 @@ class WebDAVMiddleware:
             return None
 
     def _format_propfind_xml(self, path: Path, request_path: str) -> str:
+        """Render a single ``<D:response>`` block for a WebDAV PROPFIND target.
+
+        Builds the XML envelope used by both ``Depth: 0`` PROPFIND
+        replies and the per-child rows inside ``Depth: 1`` replies.
+        The response includes the resource's display name, last-modified
+        time, size, content type, and resourcetype (collection vs. plain
+        resource).
+
+        Args:
+            path: Filesystem path whose metadata should be reported.
+            request_path: URL path matching ``path`` — used verbatim in
+                the ``<D:href>`` element so the client sees the same
+                URI it requested.
+
+        Returns:
+            A UTF-8 XML string containing a single ``<D:response>``
+            entry wrapped in a ``<D:multistatus>`` envelope.
+        """
         from xml.sax.saxutils import escape
 
         is_dir = path.is_dir()
@@ -74,6 +109,26 @@ class WebDAVMiddleware:
 </D:multistatus>"""
 
     def _format_propfind_multi(self, root_path: Path, request_path: str) -> str:
+        """Render a ``Depth: 1`` PROPFIND reply covering ``root_path`` and its direct children.
+
+        The first entry describes the requested collection itself;
+        remaining entries describe each child in sorted order. Each
+        child entry's URL is built by appending the child name onto the
+        parent's URL, so the client can address each entry directly
+        with a follow-up ``Depth: 0`` PROPFIND if it wants richer
+        metadata.
+
+        Args:
+            root_path: The directory requested by the client.
+            request_path: URL path of ``root_path`` — used as the
+                parent ``<D:href>`` for the first entry and as the
+                prefix for child entries.
+
+        Returns:
+            A UTF-8 XML string containing one ``<D:response>`` per
+            child (plus the root) inside a ``<D:multistatus>``
+            envelope.
+        """
         entries = [self._format_propfind_xml(root_path, request_path)]
         if root_path.is_dir():
             for child in sorted(root_path.iterdir()):
@@ -83,6 +138,31 @@ class WebDAVMiddleware:
                "\n".join(entries) + "\n</D:multistatus>"
 
     async def process(self, request_data: dict, call_next: Callable) -> dict:
+        """Handle WebDAV protocol methods (``PROPFIND``, ``MKCOL``, …) before they reach the next middleware.
+
+        The middleware short-circuits only WebDAV verbs; anything else
+        (regular ``GET``/``POST``/…) is passed through to ``call_next``
+        unchanged. When a WebDAV verb arrives, the URL is mapped onto
+        ``self._root`` (any escape attempt becomes a 403) and the
+        per-verb handler builds an RFC 4918-compliant reply. Mutating
+        verbs (``MKCOL``, ``MOVE``, ``COPY``, ``LOCK``, ``PROPPATCH``)
+        are rejected when the middleware was constructed in
+        ``readonly`` mode.
+
+        Args:
+            request_data: The in-flight request envelope. Reads
+                ``method`` (uppercase), ``path``, and ``headers``
+                (``Depth`` and ``Destination`` for the verbs that
+                need them).
+            call_next: Awaitable that invokes the next middleware /
+                handler and returns its response dict. Used for the
+                pass-through case and for any verb not in the WebDAV
+                set.
+
+        Returns:
+            The WebDAV response dict, or the downstream response dict
+            (whichever was appropriate).
+        """
         method = request_data.get("method", "GET").upper()
         path = request_data.get("path", "/")
 

@@ -7,8 +7,8 @@ import time
 from collections.abc import Callable
 from typing import Any, overload
 
-from rivex.core._compat import HAS_CORE, RC_V2, get_request_header
-from rivex.core._compat import rc as _rc
+from rivex.native._compat import HAS_CORE, RC_V2, get_request_header
+from rivex.native._compat import rc as _rc
 from rivex.middleware.middleware import Middleware
 
 try:

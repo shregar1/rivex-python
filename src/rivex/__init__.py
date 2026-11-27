@@ -16,8 +16,17 @@ from rivex._rust import (
     validate_uuid,
     verify_password,
 )
-from rivex.core.applications import FastAPI, Rivex
-from rivex.asgi import ASGIAdapter, ASGIWebSocket
+from rivex.applications.applications import FastAPI, Rivex
+from rivex.native.asgi import ASGIAdapter, ASGIWebSocket
+from rivex.constants import (
+    CacheTTL,
+    ContentType,
+    HTTPHeader,
+    HTTPMethod,
+    HTTPStatus,
+    Pagination,
+    ResponseStatus,
+)
 from rivex.auth.auth import (
     admin_only,
     authenticated,
@@ -41,7 +50,7 @@ from rivex.web.contenttypes import (
     get_content_type,
     get_object,
 )
-from rivex.core.context import (
+from rivex.context.context import (
     RequestContext,
     RequestContextMiddleware,
     bind_extra,
@@ -59,7 +68,7 @@ from rivex.db.automigrate import AutoMigrator
 from rivex.db.router import DatabaseRouter, RouterRegistry, using
 from rivex.db.transactions import Transaction, atomic
 from rivex.observability.debugtoolbar import DebugToolbarMiddleware
-from rivex.core.dependencies import Dependency, Depends
+from rivex.di.dependencies import Dependency, Depends
 from rivex.web.email import (
     ConsoleBackend,
     EmailBackend,
@@ -70,7 +79,7 @@ from rivex.web.email import (
     send_email,
 )
 from rivex.serialization.encoders import jsonable_encoder
-from rivex.events import (
+from rivex.lifecycle.events import (
     Signal,
     request_failed,
     request_finished,
@@ -78,7 +87,27 @@ from rivex.events import (
     server_shutdown,
     server_startup,
 )
-from rivex.core.exceptions import HTTPException, RequestValidationError, WebSocketDisconnect
+from rivex.exceptions.http.exceptions import HTTPException, RequestValidationError, WebSocketDisconnect
+from rivex.exceptions import (
+    BadRequestException,
+    ConcurrencyConflictException,
+    ConnectionFailureException,
+    ConflictException,
+    ConstraintViolationException,
+    DatabaseTimeoutException,
+    DuplicateKeyException,
+    ForbiddenException,
+    InternalServerException,
+    NotFoundException,
+    RivexException,
+    TimeoutException,
+    UnauthenticatedException,
+    UnauthorizedException,
+    UnprocessableEntityException,
+    ValidationErrorItem,
+)
+from rivex.dtos.response.abstraction import ResponseDTO, response_dto
+from rivex.dtos.response.content import HTTPResponse, JsonResponse
 from rivex.protocols.feeds import AtomFeed, RssFeed, Sitemap, SitemapIndex
 from rivex.web.forms import (
     BooleanField as BooleanField,
@@ -123,9 +152,13 @@ from rivex.web.gis import (
     haversine_distance,
     to_geojson,
 )
-from rivex.graphql import GraphQLMiddleware, graphql_mutation, graphql_query
-from rivex.protocols.grpc import GrpcClient, GrpcServer
-from rivex.protocols.grpc_web import GrpcWebMiddleware, GrpcWebServer
+from rivex.protocols.graphql import GraphQLMiddleware, graphql_mutation, graphql_query
+from rivex.protocols.grpc import GRPCClient, GRPCServer
+try:
+    from rivex.protocols.grpc import GRPCWebMiddleware, GRPCWebServer
+except ImportError:
+    GRPCWebMiddleware = None  # type: ignore[assignment]
+    GRPCWebServer = None  # type: ignore[assignment]
 from rivex.auth.guards import AllowAll, DenyAll, Guard, GuardMiddleware, IsAuthenticated, RequiresRoles
 from rivex.observability.health import HealthCheck
 from rivex.web.htmx import (
@@ -139,7 +172,11 @@ from rivex.web.htmx import (
     HXRetarget,
     HXSwap,
 )
-from rivex.protocols.http3 import Http3Client, Http3Server
+try:
+    from rivex.protocols.quic import QUICClient, QUICServer
+except ImportError:
+    QUICClient = None  # type: ignore[assignment]
+    QUICServer = None  # type: ignore[assignment]
 from rivex.web.i18n import (
     LocaleMiddleware,
     Translations,
@@ -195,7 +232,7 @@ from rivex.observability.otel import (
     set_tracer,
 )
 from rivex.data.pagination import CursorPage, Page, paginate
-from rivex.core.params import Body, Cookie, Header, Path, Query
+from rivex.di.params import Body, Cookie, Header, Path, Query
 from rivex.auth.password_reset import PasswordReset, PasswordResetMiddleware
 from rivex.auth.permissions import (
     DEFAULT_PERMISSIONS,
@@ -209,7 +246,7 @@ from rivex.auth.permissions import (
     register_permission,
 )
 from rivex.cli.plugins import Plugin
-from rivex.problem import (
+from rivex.exceptions.problem import (
     ProblemDetail,
     ProblemException,
     ProblemResponse,
@@ -223,8 +260,8 @@ from rivex.problem import (
     unprocessable,
 )
 from rivex.protocols.rawsocket import RawTCPServer, UDPBroadcastServer, UnixSocketServer
-from rivex.core.requests import Request
-from rivex.core.responses import (
+from rivex.http.requests import Request
+from rivex.http.responses import (
     EventSourceResponse,
     FileResponse,
     HTMLResponse,
@@ -235,7 +272,7 @@ from rivex.core.responses import (
     StreamingResponse,
     XMLResponse,
 )
-from rivex.core.routing import (
+from rivex.web.routing import (
     APIRouter,
     Controller,
     RouteGroup,
@@ -284,7 +321,7 @@ from rivex.serialization.serializers import (
     Serializer,
 )
 from rivex.middleware.sessions import SessionMiddleware
-from rivex.settings import Settings
+from rivex.config.settings import Settings
 from rivex.auth.social_auth import SocialAuthConfig, SocialAuthMiddleware
 from rivex.protocols.socketio import (
     SocketIOMiddleware,
@@ -293,7 +330,7 @@ from rivex.protocols.socketio import (
 )
 from rivex.web.static_pipeline import StaticPipeline
 from rivex.web.staticfiles import StaticFiles
-from rivex.core.status import APIStatus, HTTPMethod, HTTPStatus, StatusCode, status
+from rivex.enums.api.status import APIStatus, StatusCode, status
 from rivex.observability.structlog import (
     JSONFormatter,
     StructuredAccessLogMiddleware,
@@ -334,20 +371,18 @@ from rivex.data.versioning import (
     URLPathVersioning,
     VersionMiddleware,
 )
-from rivex.viewsets import (
-    BrowsableApiMiddleware,
+from rivex.web.viewsets import (
+    BrowsableAPIMiddleware,
     ListModelMixin,
     ModelViewSet,
-    ViewSet,
-)
-from rivex.viewsets import (
     Router as ViewSetRouter,
+    ViewSet,
 )
 from rivex.web.webdav import WebDAVMiddleware
 from rivex.protocols.webhooks import WebhookGuard, WebhookVerificationError, verify_signature
 
 # WebSocket feature classes — drop-in helpers for common patterns
-from rivex.websocket_features import (
+from rivex.websocket import (
     BinaryCodec,
     HeartbeatManager,
     JSONCodec,
@@ -386,10 +421,10 @@ except ImportError:  # pragma: no cover
     admin_action = None  # type: ignore[assignment]
     admin_partial = None  # type: ignore[assignment]
 
-# Native body-type coercion: Pydantic, Schemax, Marshmallow, or raw dict.
+# Native body-type coercion: Pydantic, Marshmallow, or raw dict.
 # Importing this module never fails — the availability of each backend
 # depends on whether the corresponding optional dependency is installed.
-from rivex.core._bodies import (
+from rivex.serialization._bodies import (
     SCHEMAS,
     BodySchema,
     body_schema,
@@ -398,7 +433,7 @@ from rivex.core._bodies import (
     register_body_schema,
 )
 
-__version__ = "0.2.5"
+__version__ = "0.3.0"
 __all__ = [
     # Core
     "Rivex",
@@ -426,7 +461,6 @@ __all__ = [
     "Field",
     "Settings",
     "Dependency",
-    "Depends",
     "HTTPException",
     "RequestValidationError",
     "WebSocketDisconnect",
@@ -642,16 +676,13 @@ __all__ = [
     "luhn_check",
     "sanitize_html",
     "strip_html_tags",
-    # Pluggable body schemas (Pydantic / Schemax / Marshmallow / raw dict)
+    # Pluggable body schemas (Pydantic / Marshmallow / raw dict)
     "BodySchema",
     "SCHEMAS",
     "body_schema",
     "coerce_body",
     "is_body_model",
     "register_body_schema",
-    # Back-compat re-export of the Schemax shim (deprecated — emits a
-    # DeprecationWarning on import so users migrate to ``schemax.idl``).
-    "schemax",
     # New features
     "CSPMiddleware",
     "Permission",
@@ -724,7 +755,7 @@ __all__ = [
     "ModelViewSet",
     "ListModelMixin",
     "ViewSetRouter",
-    "BrowsableApiMiddleware",
+    "BrowsableAPIMiddleware",
     "GraphQLMiddleware",
     "graphql_query",
     "graphql_mutation",
@@ -763,16 +794,16 @@ __all__ = [
     "capture_exception",
     "set_user_context",
     "set_extra_context",
-    "GrpcServer",
-    "GrpcClient",
-    "Http3Server",
-    "Http3Client",
+    "GRPCServer",
+    "GRPCClient",
+    "QUICServer",
+    "QUICClient",
     # Additional protocols
     "WebTransportServer",
     "WebTransportClient",
     "WebTransportSession",
-    "GrpcWebMiddleware",
-    "GrpcWebServer",
+    "GRPCWebMiddleware",
+    "GRPCWebServer",
     "SocketIOServer",
     "SocketIOSession",
     "SocketIOMiddleware",
@@ -801,4 +832,24 @@ __all__ = [
     "MultiServerBackend",
     "RedisPubSubBackend",
     "NATSBackend",
+    "ResponseDTO",
+    "response_dto",
+    "HTTPResponse",
+    "JsonResponse",
+    "RivexException",
+    "BadRequestException",
+    "UnauthorizedException",
+    "UnauthenticatedException",
+    "ForbiddenException",
+    "NotFoundException",
+    "ConflictException",
+    "UnprocessableEntityException",
+    "TimeoutException",
+    "InternalServerException",
+    "ConcurrencyConflictException",
+    "ConnectionFailureException",
+    "ConstraintViolationException",
+    "DatabaseTimeoutException",
+    "DuplicateKeyException",
+    "ValidationErrorItem",
 ]

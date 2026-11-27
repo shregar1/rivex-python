@@ -212,6 +212,17 @@ class Migrator:
     # ── SQL execution ──────────────────────────────────────────────────
 
     async def _run_sql(self, sql: str) -> None:
+        """Execute the given SQL script statement by statement.
+
+        Statements are split on top-level semicolons; the implementation
+        inspects the connection to pick the right calling convention so
+        the same code works against asyncpg and aiosqlite-style backends.
+
+        Args:
+            sql: Raw SQL text containing one or more semicolon-separated
+                statements. An empty or whitespace-only string is a
+                no-op.
+        """
         statements = [s.strip() for s in re.split(r";\s*", sql) if s.strip()]
         if not statements:
             return
@@ -223,6 +234,16 @@ class Migrator:
                     await conn.execute(stmt)
 
     async def _mark_applied(self, m: Migration) -> None:
+        """Record migration *m* in the tracking table.
+
+        Uses the asyncpg-style ``$1`` / ``$2`` placeholders when the
+        connection exposes an internal ``_pool`` attribute and the
+        ``?`` placeholder style otherwise.
+
+        Args:
+            m: The :class:`Migration` whose revision and description
+                should be persisted.
+        """
         async with self.pool.acquire() as conn:
             if hasattr(conn, "execute") and hasattr(conn, "_pool"):
                 await conn.execute(
@@ -237,6 +258,12 @@ class Migrator:
                 )
 
     async def _mark_reverted(self, m: Migration) -> None:
+        """Remove migration *m*'s row from the tracking table.
+
+        Args:
+            m: The :class:`Migration` whose tracking row should be
+                deleted after a successful rollback.
+        """
         async with self.pool.acquire() as conn:
             if hasattr(conn, "execute") and hasattr(conn, "_pool"):
                 await conn.execute(
@@ -258,11 +285,25 @@ class Migrator:
         _run_alembic("upgrade", target)
 
     async def alembic_downgrade(self, target: str = "-1") -> None:
+        """Delegate to Alembic's downgrade command.
+
+        Args:
+            target: Revision to downgrade to. Defaults to ``"-1"``,
+                Alembic's shorthand for "one step back".
+        """
         _run_alembic("downgrade", target)
 
     async def alembic_revision(
         self, message: str = "", autogenerate: bool = False
     ) -> None:
+        """Create a new Alembic revision.
+
+        Args:
+            message: Revision message used as the migration's docstring.
+            autogenerate: When ``True`` ``--autogenerate`` is passed so
+                Alembic diffs the live database against the model
+                metadata.
+        """
         args = ["revision", "--autogenerate"] if autogenerate else ["revision"]
         if message:
             args.extend(["-m", message])

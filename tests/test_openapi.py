@@ -1,10 +1,10 @@
 from pydantic import BaseModel
 
-from rivex.core.applications import Rivex
-from rivex.core.dependencies import Depends
+from rivex.applications.applications import Rivex
+from rivex.di.dependencies import Depends
 from rivex.openapi.openapi import generate_openapi
-from rivex.core.params import Path
-from rivex.core.routing import Controller, RouteRecord, get, post
+from rivex.di.params import Path
+from rivex.web.routing import Controller, RouteRecord, get, post, put, patch, delete
 from rivex.auth.security import APIKeyHeader, OAuth2PasswordBearer
 
 
@@ -283,7 +283,7 @@ def test_openapi_metadata_customization():
 
 
 def test_openapi_security_schemes_from_dependencies():
-    api_key = APIKeyHeader(name="x-api-key", scheme_name="ApiKeyAuth")
+    api_key = APIKeyHeader(name="x-api-key", scheme_name="APIKeyAuth")
     oauth2 = OAuth2PasswordBearer(tokenUrl="/token", scheme_name="OAuth2")
 
     async def secure(key: str = Depends(api_key), token: str = Depends(oauth2)):
@@ -293,10 +293,10 @@ def test_openapi_security_schemes_from_dependencies():
     spec = generate_openapi(title="T", version="1", routes=routes)
 
     schemes = spec["components"]["securitySchemes"]
-    assert schemes["ApiKeyAuth"] == {"type": "apiKey", "in": "header", "name": "x-api-key"}
+    assert schemes["APIKeyAuth"] == {"type": "apiKey", "in": "header", "name": "x-api-key"}
     assert schemes["OAuth2"]["type"] == "oauth2"
     assert spec["paths"]["/secure"]["get"]["security"] == [
-        {"ApiKeyAuth": []},
+        {"APIKeyAuth": []},
         {"OAuth2": []},
     ]
 
@@ -364,4 +364,136 @@ def test_class_controller_routes_appear_in_openapi_spec():
     # Tags from the Controller class should flow into the spec.
     list_tags = paths["/api/v1/widgets"]["get"].get("tags", [])
     assert "widgets" in list_tags
+
+
+# ---------------------------------------------------------------------------
+# Full CRUD on the same path — every method must survive route collection
+# and the OpenAPI emitter must publish every one of them.
+# ---------------------------------------------------------------------------
+
+
+def test_full_crud_on_collection_and_item_paths_emits_all_methods():
+    """Pin the contract that POST/PATCH/DELETE reach the spec alongside the
+    GETs on both the collection (``/widgets``) and item (``/widgets/{id}``)
+    paths. Regression guard for a class of bugs where a controller template
+    drops the mutation decorators and/or routes them at literal paths so
+    the OpenAPI emitter only sees the lookup (GET) subset."""
+
+    class WidgetsController(Controller):
+        path = "/api/v1/widgets"
+        tags = ["widgets"]
+
+        @get("", summary="List widgets")
+        async def list_widgets(self):
+            return []
+
+        @post("", summary="Create a widget")
+        async def create_widget(self):
+            return {}
+
+        @get("/{widget_id}", summary="Fetch a widget")
+        async def get_widget(self, widget_id: int):
+            return {}
+
+        @patch("/{widget_id}", summary="Update a widget")
+        async def update_widget(self, widget_id: int):
+            return {}
+
+        @delete("/{widget_id}", summary="Delete a widget")
+        async def delete_widget(self, widget_id: int):
+            return {}
+
+    app = Rivex(title="CRUD", version="1.0.0")
+    app.include_controller(WidgetsController)
+
+    spec = generate_openapi(title=app.title, version=app.version, routes=app._routes)
+    paths = spec.get("paths", {})
+
+    assert set(paths["/api/v1/widgets"].keys()) == {"get", "post"}
+    assert set(paths["/api/v1/widgets/{widget_id}"].keys()) == {"get", "patch", "delete"}
+
+
+def test_many_controllers_with_mutations_does_not_drop_methods():
+    """Bigger-scale regression: 11 controllers with 3 mutations each + 73
+    controllers with 6 mutations each, totalling >400 mutation routes, must
+    all show up in the emitted spec. Guards against any future emitter
+    change that silently filters non-GET methods at scale."""
+
+    app = Rivex(title="MegaApp", version="1.0.0")
+
+    def _make_controller(cls_name: str, path: str, mutations: list[str]) -> type:
+        attrs = {
+            "path": path,
+            "tags": [path.strip("/").split("/")[-1]],
+            "__module__": "__main__",
+        }
+        if "list" in mutations:
+            attrs["list_items"] = _route(get, "", "list")
+        if "create" in mutations:
+            attrs["create_item"] = _route(post, "", "create")
+        if "bulk_create" in mutations:
+            attrs["bulk_create"] = _route(post, "/bulk", "bulk_create")
+        if "retrieve" in mutations:
+            attrs["get_item"] = _route(get, "/{item_id}", "get")
+        if "replace" in mutations:
+            attrs["replace_item"] = _route(put, "/{item_id}", "put")
+        if "update" in mutations:
+            attrs["update_item"] = _route(patch, "/{item_id}", "patch")
+        if "destroy" in mutations:
+            attrs["delete_item"] = _route(delete, "/{item_id}", "delete")
+        if "bulk_delete" in mutations:
+            attrs["bulk_delete"] = _route(delete, "/bulk", "bulk_delete")
+        return type(cls_name, (Controller,), attrs)
+
+    def _route(decorator, path, name):
+        async def handler(self, *args, **kwargs):
+            return {}
+        handler.__name__ = name
+        return decorator(path, summary=name)(handler)
+
+    for i in range(11):
+        app.include_controller(
+            _make_controller(
+                f"NewSlice{i}",
+                f"/api/v1/new_slice_{i}",
+                ["list", "create", "update", "destroy"],
+            )
+        )
+    for i in range(73):
+        app.include_controller(
+            _make_controller(
+                f"ExistingSlice{i}",
+                f"/api/v1/existing_slice_{i}",
+                [
+                    "list",
+                    "retrieve",
+                    "create",
+                    "bulk_create",
+                    "replace",
+                    "update",
+                    "destroy",
+                    "bulk_delete",
+                ],
+            )
+        )
+
+    mutation_count = sum(1 for r in app._routes if r.method != "GET")
+    assert mutation_count > 400, f"expected >400 mutation routes, got {mutation_count}"
+
+    spec = generate_openapi(title=app.title, version=app.version, routes=app._routes)
+    methods_in_spec: set[str] = set()
+    for ops in spec["paths"].values():
+        methods_in_spec.update(ops.keys())
+
+    assert {"get", "post", "patch", "delete", "put"} <= methods_in_spec, (
+        f"missing methods in spec: {methods_in_spec}"
+    )
+
+    # Spot-check: at least one POST/PATCH/DELETE/PUT must reach each path
+    # that also has a GET, not just exist somewhere in the spec.
+    for path, ops in spec["paths"].items():
+        if "get" in ops and "{item_id}" in path:
+            assert {"get", "patch", "delete"} <= ops.keys(), (
+                f"{path} is missing mutations: {sorted(ops.keys())}"
+            )
 

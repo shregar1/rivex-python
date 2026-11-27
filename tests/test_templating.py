@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from rivex import Rivex
-from rivex.core.requests import Request
-from rivex.core.responses import HTMLResponse
+from rivex.http.requests import Request
+from rivex.http.responses import HTMLResponse
 
 
 def test_jinja2_templates_render():

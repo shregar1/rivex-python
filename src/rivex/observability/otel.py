@@ -40,6 +40,30 @@ class OpenTelemetryMiddleware:
             self._enabled = False
 
     async def process(self, request_data: dict, call_next: Callable) -> dict:
+        """Wrap the request in an OpenTelemetry span and record the outcome.
+
+        When the OpenTelemetry SDK is not importable this middleware is
+        a pass-through. Otherwise, a span named ``"<method> <path>"``
+        is opened, ``http.method``, ``http.url`` and ``service.name``
+        are stamped on it, and the downstream chain is awaited. On
+        success the response status and duration are recorded and a
+        5xx response also marks the span as failed; on exception the
+        exception is recorded via :meth:`Span.record_exception` and
+        the original exception is re-raised.
+
+        Args:
+            request_data: The in-flight request envelope. ``method``
+                and ``path`` are read for span naming and attributes.
+            call_next: Awaitable returning the downstream response
+                dict.
+
+        Returns:
+            The downstream response dict, unmodified.
+
+        Raises:
+            Exception: Whatever the downstream chain raised, after
+                recording it on the active span.
+        """
         if not self._enabled:
             return await call_next(request_data)
 
@@ -108,6 +132,16 @@ def configure_otel(
 
 
 def set_tracer(tracer: Any) -> None:
+    """Install ``tracer`` as the global OpenTelemetry tracer provider.
+
+    Thin wrapper over :func:`opentelemetry.trace.set_tracer_provider`;
+    the SDK is imported lazily so this function is safe to call when
+    OpenTelemetry is not installed (it becomes a no-op in that case).
+
+    Args:
+        tracer: A configured tracer-provider instance to register
+            globally.
+    """
     try:
         from opentelemetry import trace
         trace.set_tracer_provider(tracer)
@@ -116,6 +150,13 @@ def set_tracer(tracer: Any) -> None:
 
 
 def get_tracer() -> Any:
+    """Return the global OpenTelemetry tracer, or ``None`` if the SDK is missing.
+
+    Returns:
+        A :class:`opentelemetry.trace.Tracer` instance keyed by this
+        module's ``__name__``, or ``None`` when the OpenTelemetry
+        packages are not importable.
+    """
     try:
         from opentelemetry import trace
         return trace.get_tracer(__name__)

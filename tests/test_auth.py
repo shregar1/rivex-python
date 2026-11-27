@@ -12,9 +12,9 @@ from rivex.auth.auth import (
     current_user,
     set_user_resolver,
 )
-from rivex.core.context import RequestContextMiddleware, current_user_id, request_context
-from rivex.core.exceptions import HTTPException
-from rivex.core.requests import Request
+from rivex.context.context import RequestContextMiddleware, current_user_id, request_context
+from rivex.exceptions.http.exceptions import HTTPException
+from rivex.http.requests import Request
 
 
 @dataclass
@@ -81,7 +81,7 @@ async def test_authenticated_via_middleware_e2e():
     """End-to-end: with the context middleware installed, an
     unauthenticated request to a decorated handler comes back as 401
     without the handler running."""
-    from rivex.core._injection import build_handler_wrapper
+    from rivex.di._injection import build_handler_wrapper
 
     async def resolver(req: Request) -> _User | None:
         return None

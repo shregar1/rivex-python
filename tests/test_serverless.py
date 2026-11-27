@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from rivex import Rivex
-from rivex.serverless import AwsLambdaHandler, CloudflareHandler, VercelHandler, AzureFunctionHandler
-from rivex.asgi import ASGIAdapter
+from rivex.native.serverless import AwsLambdaHandler, CloudflareHandler, VercelHandler, AzureFunctionHandler
+from rivex.native.asgi import ASGIAdapter
 
 
 def test_aws_lambda_handler_import():
@@ -88,7 +88,7 @@ def test_aws_lambda_handler_errors_gracefully():
 
     handler = AwsLambdaHandler(app)
 
-    from rivex.core._compat import HAS_CORE
+    from rivex.native._compat import HAS_CORE
     event = {
         "version": "1.0",
         "httpMethod": "GET",

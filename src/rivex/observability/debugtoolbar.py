@@ -29,6 +29,20 @@ class DebugToolbarMiddleware:
         self._start_time: float = 0.0
 
     def _should_show(self, request_data: dict) -> bool:
+        """Decide whether the debug toolbar should be injected for this request.
+
+        The toolbar is shown when either the request's query string
+        contains ``debug`` (e.g. ``?debug``) or the ``rivex_debug=1``
+        cookie is set.
+
+        Args:
+            request_data: The in-flight request envelope. ``query_string``
+                and ``cookies`` are read.
+
+        Returns:
+            ``True`` when the toolbar should be injected, ``False``
+            otherwise.
+        """
         query = request_data.get("query_string", "")
         if query and "debug" in query:
             return True
@@ -38,6 +52,26 @@ class DebugToolbarMiddleware:
         return False
 
     async def process(self, request_data: dict, call_next: Callable) -> dict:
+        """Time the request and inject a debug panel into HTML responses.
+
+        Resets per-request stats, decides whether to instrument the
+        request via :meth:`_should_show`, installs a SQL probe on the
+        database pool when one is reachable from request state, and
+        otherwise passes through unchanged. For HTML responses with a
+        ``</body>`` terminator, the rendered panel is inserted just
+        before it and ``Content-Length`` is updated.
+
+        Args:
+            request_data: The in-flight request envelope as carried by
+                the middleware chain.
+            call_next: Awaitable returning the downstream response
+                dict.
+
+        Returns:
+            The downstream response dict, with the toolbar HTML
+            inserted when the toolbar is enabled and the response is
+            HTML. Otherwise the response is returned untouched.
+        """
         self._start_time = time.time()
         self._queries = []
         self._cache_stats = {"hits": 0, "misses": 0}
@@ -79,9 +113,33 @@ class DebugToolbarMiddleware:
         return result
 
     def _record_query(self, sql: str, duration: float) -> None:
+        """Capture one SQL statement for the toolbar's SQL panel.
+
+        The statement is truncated to 200 characters and the duration
+        is formatted with a millisecond suffix for display.
+
+        Args:
+            sql: The SQL statement that was executed.
+            duration: How long the statement took, in seconds.
+        """
         self._queries.append({"sql": sql[:200], "duration": f"{duration:.2f}ms"})
 
     def _render_panel(self, result: dict, duration: float) -> str:
+        """Build the HTML snippet for the debug toolbar panel.
+
+        Combines the recorded SQL queries, cache hit/miss counts, and
+        request meta (method, path, status, duration) into a single
+        fixed-position ``<div>`` that callers inject just before the
+        page's closing ``</body>`` tag.
+
+        Args:
+            result: The downstream response dict; ``status``, ``method``
+                and ``path`` are read for the panel header.
+            duration: Total request duration in milliseconds.
+
+        Returns:
+            The HTML snippet for the toolbar panel.
+        """
         status = result.get("status", 200)
         method = result.get("method", "GET")
         path = result.get("path", "/")

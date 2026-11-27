@@ -456,7 +456,7 @@ def test_rivex_constructor_accepts_admin_url_and_token() -> None:
     pytest.importorskip("rivex_core", reason="Rivex Rust extension not built")
     import inspect
 
-    from rivex.core.applications import Rivex
+    from rivex.applications.applications import Rivex
 
     sig = inspect.signature(Rivex.__init__)
     assert "admin_url" in sig.parameters
@@ -467,7 +467,7 @@ def test_rivex_constructor_keeps_backward_compatible_defaults() -> None:
     pytest.importorskip("rivex_core", reason="Rivex Rust extension not built")
     import inspect
 
-    from rivex.core.applications import Rivex
+    from rivex.applications.applications import Rivex
 
     sig = inspect.signature(Rivex.__init__)
     assert sig.parameters["admin_url"].default is None

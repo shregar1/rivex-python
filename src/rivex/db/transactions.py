@@ -73,35 +73,65 @@ class Transaction:
                 self._conn = None
 
     async def _commit_internal(self) -> None:
+        """Commit the in-flight transaction or release its savepoint.
+
+        If the transaction was started as a savepoint inside an outer
+        transaction only the savepoint is released; otherwise a top-level
+        ``COMMIT`` is issued.
+        """
         if self._savepoint_name:
             await self._conn.execute(f"RELEASE SAVEPOINT {self._savepoint_name}")
         else:
             await self._conn.execute("COMMIT")
 
     async def _rollback_internal(self) -> None:
+        """Roll back the in-flight transaction or its enclosing savepoint.
+
+        The behavior mirrors :meth:`_commit_internal` but issues
+        ``ROLLBACK TO SAVEPOINT`` when a savepoint is in effect, falling
+        back to a top-level ``ROLLBACK`` otherwise.
+        """
         if self._savepoint_name:
             await self._conn.execute(f"ROLLBACK TO SAVEPOINT {self._savepoint_name}")
         else:
             await self._conn.execute("ROLLBACK")
 
     async def commit(self) -> None:
+        """Commit the active transaction and mark the context inactive."""
         await self._commit_internal()
         self._active = False
 
     async def rollback(self) -> None:
+        """Roll back the active transaction and mark the context inactive."""
         await self._rollback_internal()
         self._active = False
 
     async def savepoint(self) -> str:
+        """Create a nested savepoint inside the current transaction.
+
+        Returns:
+            The generated savepoint name, which can later be passed to
+            :meth:`rollback_to_savepoint` or :meth:`release_savepoint`.
+        """
         sp_id = id(self)
         name = f"savepoint_{sp_id}"
         await self._conn.execute(f"SAVEPOINT {name}")
         return name
 
     async def rollback_to_savepoint(self, name: str) -> None:
+        """Undo work back to the named savepoint without ending the transaction.
+
+        Args:
+            name: Savepoint name returned by :meth:`savepoint`.
+        """
         await self._conn.execute(f"ROLLBACK TO SAVEPOINT {name}")
 
     async def release_savepoint(self, name: str) -> None:
+        """Destroy the named savepoint and fold its changes into the parent.
+
+        Args:
+            name: Savepoint name returned by :meth:`savepoint`.
+        """
         await self._conn.execute(f"RELEASE SAVEPOINT {name}")
 
 
@@ -127,7 +157,7 @@ class atomic:
     async def __aenter__(self) -> Transaction:
         pool = self._pool
         if pool is None:
-            from rivex.core.applications import Rivex
+            from rivex.applications.applications import Rivex
             app = Rivex.get_current()
             pool = app.db
         self._transaction = Transaction(pool, savepoint=self._savepoint)
@@ -137,10 +167,20 @@ class atomic:
         return await self._transaction.__aexit__(*args)
 
     def __call__(self, func):
+        """Use ``atomic`` as a decorator that wraps *func* in a transaction.
+
+        Args:
+            func: Async callable to wrap.
+
+        Returns:
+            A wrapper that opens an atomic context around every call to
+            *func* and forwards the return value.
+        """
         from functools import wraps
 
         @wraps(func)
         async def wrapper(*args, **kwargs):
+            """Run *func* inside the atomic context and propagate its result."""
             async with self:
                 return await func(*args, **kwargs)
         return wrapper

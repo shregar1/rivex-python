@@ -3,7 +3,7 @@
 Quick start (resolver-based):
 
     from rivex import authenticated, set_user_resolver
-    from rivex.core.context import current_user
+    from rivex.context.context import current_user
 
     async def resolve_user(request):
         token = request.cookies.get("session")
@@ -44,11 +44,11 @@ import json
 import time
 from typing import Any, Awaitable, Callable, TypeVar
 
-from rivex.core._compat import HAS_CORE
-from rivex.core._compat import rc as _rc
-from rivex.core.context import bind_user, request_context
-from rivex.core.exceptions import HTTPException
-from rivex.core.requests import Request
+from rivex.native._compat import HAS_CORE
+from rivex.native._compat import rc as _rc
+from rivex.context.context import bind_user, request_context
+from rivex.exceptions.http.exceptions import HTTPException
+from rivex.http.requests import Request
 
 _UserResolver = Callable[[Request], Awaitable[Any] | Any]
 _USER_RESOLVER: _UserResolver | None = None
@@ -80,20 +80,37 @@ def _build_jwt_wrapper(handler: Callable, jwt_config: dict) -> Callable:
     verify = jwt_config["verify"]
 
     async def jwt_wrapper(request_data: dict) -> dict:
+        """Verify a JWT and invoke the wrapped handler, returning the response.
+
+        Pulls the ``Authorization`` header from ``request_data``, requires a
+        ``Bearer`` token, and runs the configured ``verify`` callable to
+        validate the signature and expiry. On failure, a 401 HTTP exception
+        response is returned without ever touching the wrapped handler. On
+        success, the claims are stashed on the active request context and the
+        downstream handler is awaited.
+
+        Args:
+            request_data: The in-flight request envelope carried by the
+                Rust/ASGI pipeline. Only its ``headers`` mapping is read.
+
+        Returns:
+            The downstream handler's response dict, or a 401 error response
+            built from :class:`HTTPException` when authentication fails.
+        """
         auth_header = _extract_auth_from_request_data(request_data)
         if not auth_header:
-            from rivex.core._injection import _http_exception_response
+            from rivex.di._injection import _http_exception_response
             return _http_exception_response(HTTPException(401, "Missing authorization header"))
 
         prefix = "Bearer "
         if not auth_header.startswith(prefix):
-            from rivex.core._injection import _http_exception_response
+            from rivex.di._injection import _http_exception_response
             return _http_exception_response(HTTPException(401, "Invalid authorization scheme"))
 
         token = auth_header[len(prefix):].strip()
         claims = verify(token)
         if claims is None:
-            from rivex.core._injection import _http_exception_response
+            from rivex.di._injection import _http_exception_response
             return _http_exception_response(HTTPException(401, "Invalid token"))
 
         _stash_user(claims)
@@ -135,6 +152,20 @@ def current_user() -> Any | None:
 
 
 def _find_request(args: tuple, kwargs: dict) -> Any:
+    """Locate the first :class:`Request` instance in a handler call's arguments.
+
+    Inspects positional args first, then keyword values, then a ``request``
+    keyword specifically, and finally falls back to the first positional arg
+    if it is a request. Returns ``None`` when no request is found so the
+    caller can raise an informative error.
+
+    Args:
+        args: Positional arguments the handler was invoked with.
+        kwargs: Keyword arguments the handler was invoked with.
+
+    Returns:
+        The first :class:`Request` instance discovered, or ``None``.
+    """
     for arg in args:
         if isinstance(arg, Request):
             return arg
@@ -152,6 +183,17 @@ def _find_request(args: tuple, kwargs: dict) -> Any:
 
 
 def _stash_user(user: Any) -> None:
+    """Bind the resolved user to the active request context, if any.
+
+    Stashes ``user`` under the ``user`` key of the current request context's
+    ``extras`` map, then also calls :func:`bind_user` with the user's
+    ``id`` attribute (when present) so per-request logging/tracing can pick
+    it up. A no-op when no request context is active.
+
+    Args:
+        user: The resolved user object. May be ``None`` for callers that
+            only need the ``id``-based binding; both branches tolerate it.
+    """
     ctx = request_context()
     if ctx is not None:
         ctx.extras["user"] = user
@@ -186,10 +228,49 @@ def authenticated(
     """
 
     def _decorator(fn: Callable) -> Callable:
+        """Build the async wrapper that enforces authentication around ``fn``.
+
+        Resolves the per-call user via the registered or per-handler
+        ``resolver``, raises :class:`HTTPException` 401 when no user is
+        returned, enforces any required ``roles`` (else 403), stashes the
+        user on the request context, and optionally injects it as the
+        ``user`` kwarg before delegating to the wrapped coroutine.
+
+        Args:
+            fn: The async handler to wrap.
+
+        Returns:
+            A coroutine function that performs the auth checks and then
+            awaits ``fn`` with the original arguments.
+        """
         effective_resolver = resolver if resolver is not None else _USER_RESOLVER
 
         @functools.wraps(fn)
         async def wrapper(*args: Any, **kwargs: Any) -> Any:
+            """Authenticate the request, then delegate to the wrapped handler.
+
+            Re-resolves the user resolver inside the coroutine to avoid
+            binding issues across the event loop, locates the inbound
+            :class:`Request`, runs the resolver, enforces any required
+            roles, stashes the user, and finally awaits the wrapped
+            handler with the original arguments (and ``user`` injected
+            when ``inject=True``).
+
+            Args:
+                *args: Positional arguments forwarded to the handler.
+                **kwargs: Keyword arguments forwarded to the handler;
+                    ``user`` is added here when ``inject`` is set on
+                    the outer decorator.
+
+            Returns:
+                Whatever the wrapped handler returns.
+
+            Raises:
+                RuntimeError: If no user resolver is registered or no
+                    :class:`Request` is found among the arguments.
+                HTTPException: 401 when authentication fails, 403 when
+                    role requirements are not satisfied.
+            """
             nonlocal effective_resolver
             if effective_resolver is None:
                 effective_resolver = resolver if resolver is not None else _USER_RESOLVER
@@ -271,6 +352,19 @@ def get_jwt_claims() -> dict[str, Any] | None:
 
 
 def _b64_decode(s: str) -> bytes:
+    """Decode a URL-safe base64 string, restoring any missing ``=`` padding.
+
+    JWT base64 segments are required to omit trailing ``=`` padding, so
+    callers pass the raw segment directly. Padding is re-added before
+    delegating to :func:`base64.urlsafe_b64decode`.
+
+    Args:
+        s: A URL-safe base64 string that may be missing trailing
+            ``=`` padding.
+
+    Returns:
+        The decoded raw bytes.
+    """
     padded = s + "=" * (4 - len(s) % 4) if len(s) % 4 else s
     return base64.urlsafe_b64decode(padded)
 
@@ -317,6 +411,21 @@ def jwt_required(
     """
 
     def _verify(token: str) -> dict[str, Any] | None:
+        """Verify a JWT and return its claims, or ``None`` if verification fails.
+
+        Prefers the Rust core verifier for ``HS256``/``HS384``/``HS512`` when
+        available, falling back to a pure-Python HMAC implementation. Always
+        checks the ``exp`` claim against the current time and rejects
+        expired tokens by returning ``None``.
+
+        Args:
+            token: The raw ``header.payload.signature`` JWT string.
+
+        Returns:
+            The decoded claims dict on success, or ``None`` if the
+            signature does not match, the token is malformed, or the
+            ``exp`` claim has elapsed.
+        """
         alg = algorithm.upper()
         if HAS_CORE and alg in ("HS256", "HS384", "HS512"):
             try:
@@ -360,6 +469,20 @@ def jwt_required(
         return payload
 
     def decorator(func: F) -> F:
+        """Attach the JWT configuration to the handler for the router to use.
+
+        Stores the verification callable together with the secret and
+        algorithm on a private attribute of ``func`` so
+        :class:`Rivex._build` can wire up the same verifier in the Rust
+        pipeline that runs the actual request.
+
+        Args:
+            func: The async handler to annotate.
+
+        Returns:
+            The same ``func``, mutated in place with a
+            ``_rivex_jwt_config`` attribute.
+        """
         # Store JWT config so applications.py can build the handler correctly
         func._rivex_jwt_config = {"secret": secret, "algorithm": algorithm, "verify": _verify}
         return func

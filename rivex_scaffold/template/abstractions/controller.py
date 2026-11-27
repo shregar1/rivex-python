@@ -10,7 +10,7 @@ from rivex import Controller, HTTPException, Request
 from abstractions.context import ContextMixin
 from abstractions.service import IService
 from constants.logger import DOMAIN_ERROR, UNHANDLED_ERROR
-from dtos.response import ApiEnvelopeResponse
+from dtos.response import APIEnvelopeResponse
 from errors import DomainError
 from utilities.api_envelope import http_exception_detail
 
@@ -73,7 +73,7 @@ class IController(Controller, ContextMixin, ABC):
             controller=self.__class__.__name__,
             api_name=self.api_name or None,
         )
-        envelope = ApiEnvelopeResponse.from_domain_error(
+        envelope = APIEnvelopeResponse.from_domain_error(
             err,
             reference_urn=self.urn or None,
         )
@@ -84,7 +84,7 @@ class IController(Controller, ContextMixin, ABC):
 
     def respond(self, data: Any, *, response_message: str = "OK", response_key: str = "SUCCESS") -> dict:
         """Wrap a successful handler payload in the standard API envelope."""
-        envelope = ApiEnvelopeResponse.success(
+        envelope = APIEnvelopeResponse.success(
             data,
             response_message=response_message,
             response_key=response_key,
@@ -103,7 +103,7 @@ class IController(Controller, ContextMixin, ABC):
             exc=err,
             controller=self.__class__.__name__,
         )
-        envelope = ApiEnvelopeResponse.failed(
+        envelope = APIEnvelopeResponse.failed(
             "Internal server error",
             "INTERNAL_ERROR",
             reference_urn=self.urn or None,

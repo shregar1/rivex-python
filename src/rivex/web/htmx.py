@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from rivex.core.responses import HTMLResponse
+from rivex.http.responses import HTMLResponse
 
 
 __all__ = (

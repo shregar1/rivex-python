@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from rivex.core.exceptions import HTTPException
+from rivex.exceptions.http.exceptions import HTTPException
 
 
 class ValidationError(HTTPException):
@@ -27,6 +27,26 @@ class FormField:
     attrs: dict[str, str] = field(default_factory=dict)
 
     def render(self, value: Any = None, errors: list[str] | None = None) -> str:
+        """Render the field as an HTML ``<input>`` (or ``<select>``) element.
+
+        When ``choices`` is configured, a ``<select>`` is emitted with
+        one ``<option>`` per pair; otherwise a single ``<input>`` is
+        produced using ``field_type`` for the ``type`` attribute. The
+        current value (either ``value`` or ``self.default`` when
+        ``value`` is ``None``) is HTML-escaped before interpolation.
+        Any ``errors`` are rendered as a trailing ``<ul class="errors">``
+        list.
+
+        Args:
+            value: Value to mark the control as selected/filled with.
+                ``None`` falls back to ``self.default``.
+            errors: Per-field validation messages to surface alongside
+                the control. Empty / ``None`` produces no error markup.
+
+        Returns:
+            The raw HTML for this field, ready to be embedded in a
+            form-rendering template.
+        """
         from html import escape
         current = value if value is not None else self.default
         val = escape(str(current)) if current is not None else ""
@@ -76,15 +96,43 @@ class Form:
         self._build_fields()
 
     def _build_fields(self) -> None:
+        """Populate ``self._fields`` from any :class:`FormField` class attributes.
+
+        Walks the class ``__dict__`` (via :func:`dir`) and stores every
+        attribute that is a :class:`FormField` instance, keyed by its
+        attribute name on the class. Called once from ``__init__``;
+        subclasses typically do not need to invoke it directly.
+        """
         for attr_name in dir(self.__class__):
             val = getattr(self.__class__, attr_name)
             if isinstance(val, FormField):
                 self._fields[attr_name] = val
 
     def fields(self) -> dict[str, FormField]:
+        """Return a shallow copy of the registered field map.
+
+        Returns:
+            Mapping of field name → :class:`FormField` for every
+            ``FormField`` declared on the form class.
+        """
         return dict(self._fields)
 
     def is_valid(self) -> bool:
+        """Run every field's validators and populate ``errors`` and ``cleaned_data``.
+
+        Re-evaluates validation from scratch on every call: any
+        previously-stored errors are cleared and ``cleaned_data`` is
+        rebuilt from the bound input. Each field's ``validators`` are
+        run in order; a raised :class:`ValueError` is recorded as a
+        per-field error message. Required fields that resolve to
+        ``None`` or the empty string are flagged with a default
+        "This field is required." error.
+
+        Returns:
+            ``True`` when no errors were recorded, ``False`` otherwise.
+            An unbound form (``is_bound`` is ``False``) short-circuits
+            to ``False`` without running validators.
+        """
         if not self.is_bound:
             return False
         self._errors = {}
@@ -106,13 +154,37 @@ class Form:
 
     @property
     def errors(self) -> dict[str, list[str]]:
+        """Return a copy of the per-field validation errors.
+
+        Returns:
+            Mapping of field name → list of human-readable error
+            messages. Empty when :meth:`is_valid` was last called and
+            returned ``True``.
+        """
         return dict(self._errors)
 
     @property
     def cleaned_data(self) -> dict[str, Any]:
+        """Return a copy of the validated, transformed field values.
+
+        Returns:
+            Mapping of field name → cleaned value. Populated by
+            :meth:`is_valid`; empty on an unbound form or one whose
+            validation produced errors.
+        """
         return dict(self._cleaned_data)
 
     def as_table(self) -> str:
+        """Render the form as a ``<table>`` with one row per field.
+
+        Each row contains a ``<label>`` and the field's rendered
+        control; per-field errors are passed through to
+        :meth:`FormField.render` and shown alongside the input.
+
+        Returns:
+            A ``<table>`` element with one ``<tr>`` per registered
+            field, in the order they were discovered on the class.
+        """
         rows: list[str] = []
         for name, field in self._fields.items():
             errs = self._errors.get(name, [])
@@ -124,6 +196,14 @@ class Form:
         return f"<table>{''.join(rows)}</table>"
 
     def as_p(self) -> str:
+        """Render the form as a sequence of ``<p>`` blocks, one per field.
+
+        Each block contains a ``<label>`` followed by the field's
+        rendered control, suitable for default Bootstrap-style forms.
+
+        Returns:
+            Concatenated ``<p>`` elements, one per field.
+        """
         parts: list[str] = []
         for name, field in self._fields.items():
             errs = self._errors.get(name, [])
@@ -132,6 +212,12 @@ class Form:
         return "".join(parts)
 
     def as_ul(self) -> str:
+        """Render the form as a ``<ul>`` of labelled list items.
+
+        Returns:
+            A ``<ul>`` element whose ``<li>`` children each contain
+            a ``<label>`` and the field's rendered control.
+        """
         items: list[str] = []
         for name, field in self._fields.items():
             errs = self._errors.get(name, [])
@@ -140,6 +226,17 @@ class Form:
         return f"<ul>{''.join(items)}</ul>"
 
     def hidden_fields(self) -> str:
+        """Emit hidden ``<input>`` elements for every field whose ``field_type`` is ``"hidden"``.
+
+        Iterates the registered fields once and concatenates a
+        ``<input type="hidden" name="…" value="…">`` element for each
+        matching field. Used by templates that place hidden state
+        outside the visible form (CSRF tokens, redirect targets, …).
+
+        Returns:
+            Concatenated hidden ``<input>`` HTML. Empty when no hidden
+            fields are registered.
+        """
         parts: list[str] = []
         for name, field in self._fields.items():
             if field.field_type == "hidden":
@@ -161,6 +258,24 @@ class EmailField(FormField):
         self.validators.append(self._validate_email)
 
     def _validate_email(self, value: Any) -> str:
+        """Coerce ``value`` to a string and require a literal ``"@"`` substring.
+
+        A bare ``"@"`` check — sufficient for the common case of
+        catching obviously-wrong inputs. Full RFC-5322 validation is
+        intentionally out of scope; delegate to the email-sending
+        backend for any deeper checks.
+
+        Args:
+            value: Candidate value, typically a string from the
+                request data.
+
+        Returns:
+            ``value`` unchanged when it passes the check.
+
+        Raises:
+            ValueError: When ``value`` is not a string or has no
+                ``"@"`` character.
+        """
         if not isinstance(value, str) or "@" not in value:
             raise ValueError("Enter a valid email address.")
         return value
@@ -180,6 +295,19 @@ class IntegerField(FormField):
         self.validators.append(self._validate_int)
 
     def _validate_int(self, value: Any) -> int:
+        """Coerce ``value`` to ``int`` using the built-in :func:`int` constructor.
+
+        Args:
+            value: Candidate value, typically a string from the
+                request data.
+
+        Returns:
+            ``value`` converted to an :class:`int`.
+
+        Raises:
+            ValueError: When the conversion fails (non-numeric
+                strings, ``None``, etc.).
+        """
         try:
             return int(value)
         except (TypeError, ValueError):
@@ -200,6 +328,23 @@ class SelectField(FormField):
         self.validators.append(self._validate_choice)
 
     def _validate_choice(self, value: Any) -> str:
+        """Confirm ``value`` matches one of the configured ``choices`` keys.
+
+        Comparison is string-based: the candidate is stringified via
+        :func:`str` before lookup, mirroring the value attribute used
+        by the rendered ``<option>`` elements.
+
+        Args:
+            value: Candidate value, typically a string from the
+                request data.
+
+        Returns:
+            ``str(value)`` when it matches a configured choice key.
+
+        Raises:
+            ValueError: When ``str(value)`` is not present in
+                ``self.choices``.
+        """
         valid = [k for k, _ in (self.choices or [])]
         if str(value) not in valid:
             raise ValueError(f"Select a valid choice. {value} is not one of the available choices.")
@@ -212,6 +357,22 @@ class TextAreaField(FormField):
         super().__init__(**kwargs)
 
     def render(self, value: Any = None, errors: list[str] | None = None) -> str:
+        """Render a ``<textarea>`` element populated with the field's value.
+
+        Overrides :meth:`FormField.render` because a textarea needs
+        the value between the tags (not as a ``value="…"`` attribute)
+        and has no concept of a ``field_type`` choice.
+
+        Args:
+            value: Value to populate the textarea with. ``None``
+                falls back to ``self.default``.
+            errors: Per-field validation messages to surface after
+                the textarea. ``None`` produces no error markup.
+
+        Returns:
+            The raw HTML for the textarea element, including any
+            trailing ``<ul class="errors">`` block.
+        """
         from html import escape
         current = value if value is not None else self.default
         val = escape(str(current)) if current is not None else ""

@@ -86,9 +86,25 @@ class WebSocket:
         return _json.loads(text)
 
     async def send_text(self, data: str) -> None:
+        """Send a text frame to the peer.
+
+        The synchronous ``PyWebSocket.send_text`` runs in the loop's
+        default executor so the caller's coroutine does not block.
+
+        Args:
+            data: The UTF-8 text payload to send.
+        """
         await self._loop.run_in_executor(None, self._raw.send_text, data)
 
     async def send_bytes(self, data: bytes) -> None:
+        """Send a binary frame to the peer.
+
+        The synchronous ``PyWebSocket.send_bytes`` runs in the loop's
+        default executor so the caller's coroutine does not block.
+
+        Args:
+            data: The raw payload bytes to send.
+        """
         await self._loop.run_in_executor(None, self._raw.send_bytes, data)
 
     async def send_json(self, data: Any) -> None:

@@ -101,6 +101,18 @@ class StaticPipeline:
         return results
 
     def load_manifest(self) -> dict[str, str]:
+        """Read the manifest JSON from disk and return it as a copy.
+
+        Replaces the in-memory ``self._manifest`` with whatever is on
+        disk, so subsequent :meth:`resolve_url` lookups see the latest
+        on-disk state. A shallow copy is returned so callers cannot
+        accidentally mutate the internal cache.
+
+        Returns:
+            Mapping of original relative paths to their versioned
+            filenames as recorded in ``self._manifest_path``. Empty
+            when no manifest file exists.
+        """
         if self._manifest_path.exists():
             self._manifest = json.loads(self._manifest_path.read_text())
         return dict(self._manifest)

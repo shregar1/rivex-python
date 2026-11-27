@@ -320,10 +320,9 @@ def test_rivex_app_name_default() -> None:
 
 def test_body_schemas_constants() -> None:
     """The SCHEMAS tuple has all expected backends."""
-    from rivex.core._bodies import SCHEMAS
+    from rivex.serialization._bodies import SCHEMAS
 
     assert "pydantic" in SCHEMAS
-    assert "schemax" in SCHEMAS
     assert "marshmallow" in SCHEMAS
     assert "dataclass" in SCHEMAS
     assert "attrs" in SCHEMAS
@@ -333,7 +332,7 @@ def test_body_schemas_constants() -> None:
 
 def test_register_body_schema() -> None:
     """register_body_schema adds custom schemas to the registry."""
-    from rivex.core._bodies import body_schema_extended, register_body_schema
+    from rivex.serialization._bodies import body_schema_extended, register_body_schema
 
     class MyCustom:
         pass
@@ -352,7 +351,7 @@ def test_register_body_schema_rejects_builtin() -> None:
     """register_body_schema refuses to shadow built-in backends."""
     import pytest
 
-    from rivex.core._bodies import BodySchema, register_body_schema
+    from rivex.serialization._bodies import BodySchema, register_body_schema
 
     with pytest.raises(ValueError):
         register_body_schema(
@@ -364,7 +363,7 @@ def test_register_body_schema_rejects_builtin() -> None:
 
 def test_body_schema_returns_unknown() -> None:
     """body_schema returns 'unknown' for unrecognized types."""
-    from rivex.core._bodies import BodySchema, body_schema
+    from rivex.serialization._bodies import BodySchema, body_schema
 
     assert body_schema(object) == BodySchema.UNKNOWN
     assert body_schema(type(None)) == BodySchema.UNKNOWN
@@ -372,7 +371,7 @@ def test_body_schema_returns_unknown() -> None:
 
 def test_coerce_body_dict_passthrough() -> None:
     """coerce_body passes dicts through without coercion."""
-    from rivex.core._bodies import coerce_body
+    from rivex.serialization._bodies import coerce_body
 
     data = {"x": 1, "y": "hello"}
     result = coerce_body(data, dict)
@@ -383,7 +382,7 @@ def test_coerce_body_pydantic_creates_instance() -> None:
     """coerce_body creates a Pydantic model from dict."""
     from pydantic import BaseModel
 
-    from rivex.core._bodies import coerce_body
+    from rivex.serialization._bodies import coerce_body
 
     class User(BaseModel):
         name: str
@@ -401,7 +400,7 @@ def test_coerce_body_json_string() -> None:
 
     from pydantic import BaseModel
 
-    from rivex.core._bodies import coerce_body
+    from rivex.serialization._bodies import coerce_body
 
     class User(BaseModel):
         name: str
@@ -415,7 +414,7 @@ def test_coerce_body_pydantic() -> None:
     """coerce_body handles Pydantic models."""
     from pydantic import BaseModel
 
-    from rivex.core._bodies import coerce_body
+    from rivex.serialization._bodies import coerce_body
 
     class User(BaseModel):
         name: str
@@ -428,7 +427,7 @@ def test_coerce_body_pydantic() -> None:
 
 def test_coerce_body_dict() -> None:
     """coerce_body passes dicts through."""
-    from rivex.core._bodies import coerce_body
+    from rivex.serialization._bodies import coerce_body
 
     data = {"x": 1, "y": "hello"}
     result = coerce_body(data, dict)
@@ -440,7 +439,7 @@ def test_coerce_body_unsupported_type() -> None:
     import pytest
 
     from rivex import RequestValidationError
-    from rivex.core._bodies import coerce_body
+    from rivex.serialization._bodies import coerce_body
 
     # coerce_body supports dict, bytes, str — but not list (list is not JSON-decodable)
     with pytest.raises(RequestValidationError):
@@ -451,7 +450,7 @@ def test_is_body_model_pydantic() -> None:
     """is_body_model detects Pydantic models."""
     from pydantic import BaseModel
 
-    from rivex.core._bodies import is_body_model
+    from rivex.serialization._bodies import is_body_model
 
     class Foo(BaseModel):
         x: int
@@ -465,7 +464,7 @@ def test_is_body_model_pydantic() -> None:
 
 def test_is_body_model_unknown() -> None:
     """is_body_model returns False for truly unknown types."""
-    from rivex.core._bodies import is_body_model
+    from rivex.serialization._bodies import is_body_model
 
     # int and object are not recognized as body types
     assert is_body_model(int) is False
@@ -476,7 +475,7 @@ def test_is_body_model_dataclass() -> None:
     """is_body_model detects dataclasses."""
     from dataclasses import dataclass
 
-    from rivex.core._bodies import is_body_model
+    from rivex.serialization._bodies import is_body_model
 
     @dataclass
     class Foo:
@@ -491,7 +490,7 @@ def test_is_body_model_attrs() -> None:
         import attr
     except ImportError:
         pytest.skip("attrs not installed")
-    from rivex.core._bodies import is_body_model
+    from rivex.serialization._bodies import is_body_model
 
     @attr.s
     class Foo:
@@ -506,7 +505,7 @@ def test_is_body_model_msgspec() -> None:
         import msgspec
     except ImportError:
         pytest.skip("msgspec not installed")
-    from rivex.core._bodies import is_body_model
+    from rivex.serialization._bodies import is_body_model
 
     class Foo(msgspec.Struct):
         x: int
@@ -520,7 +519,7 @@ def test_is_body_model_marshmallow() -> None:
         import marshmallow
     except ImportError:
         pytest.skip("marshmallow not installed")
-    from rivex.core._bodies import is_body_model
+    from rivex.serialization._bodies import is_body_model
 
     class Foo(marshmallow.Schema):
         x = marshmallow.fields.Int()
@@ -530,7 +529,7 @@ def test_is_body_model_marshmallow() -> None:
 
 def test_coerce_form_data_dict() -> None:
     """coerce_form_data with a dict hint passes through."""
-    from rivex.core._bodies import coerce_form_data
+    from rivex.serialization._bodies import coerce_form_data
 
     data = {"name": "Alice", "age": "30"}
     result = coerce_form_data(data, dict)
@@ -542,7 +541,7 @@ def test_coerce_form_data_pydantic() -> None:
     """coerce_form_data with a Pydantic model hint coerces fields."""
     from pydantic import BaseModel
 
-    from rivex.core._bodies import coerce_form_data
+    from rivex.serialization._bodies import coerce_form_data
 
     class User(BaseModel):
         name: str
@@ -556,7 +555,7 @@ def test_coerce_form_data_pydantic() -> None:
 
 def test_coerce_form_data_keeps_strings() -> None:
     """coerce_form_data passes through string fields unchanged."""
-    from rivex.core._bodies import coerce_form_data
+    from rivex.serialization._bodies import coerce_form_data
 
     data = {"name": "Alice"}
     result = coerce_form_data(data, {"name": str})

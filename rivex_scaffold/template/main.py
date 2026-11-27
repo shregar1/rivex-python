@@ -10,8 +10,8 @@ from ormx import connect, disconnect
 
 import models  # noqa: F401 — register ORMX model registry
 from errors import DomainError
-from dtos.response import ApiEnvelopeResponse
-from rivex.core._compat import get_request_header
+from dtos.response import APIEnvelopeResponse
+from rivex.native._compat import get_request_header
 from configs import (
     MEDIA_DIR,
     MEDIA_URL_PREFIX,
@@ -94,7 +94,7 @@ async def handle_domain_error(request, exc: DomainError) -> tuple[int, dict[str,
         status_code=exc.status_code,
     )
     request_data = request if isinstance(request, dict) else {}
-    envelope = ApiEnvelopeResponse.from_domain_error(
+    envelope = APIEnvelopeResponse.from_domain_error(
         exc,
         reference_urn=_reference_urn_from_request(request_data),
     )
@@ -126,7 +126,7 @@ async def handle_validation_error(request, exc: RequestValidationError) -> tuple
                     "code": "VALIDATION_ERROR",
                 }
             )
-    envelope = ApiEnvelopeResponse.failed(
+    envelope = APIEnvelopeResponse.failed(
         "Validation failed",
         "VALIDATION_ERROR",
         errors=errors or [{"message": "Validation failed", "code": "VALIDATION_ERROR"}],
@@ -144,7 +144,7 @@ async def handle_unhandled_exception(request, exc: Exception) -> tuple[int, dict
         error_type=type(exc).__name__,
         error_message=str(exc),
     )
-    envelope = ApiEnvelopeResponse.failed(
+    envelope = APIEnvelopeResponse.failed(
         "Something went wrong. Please try again.",
         "INTERNAL_ERROR",
         errors=[{"message": "Something went wrong. Please try again.", "code": "INTERNAL_ERROR"}],

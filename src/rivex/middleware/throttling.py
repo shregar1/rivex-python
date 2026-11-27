@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import time
 
-from rivex.core._compat import client_ip, get_request_header, json_error_response
+from rivex.native._compat import client_ip, get_request_header, json_error_response
 from rivex.middleware.middleware import Middleware
 
 
@@ -14,6 +14,11 @@ class BaseThrottle:
 
     def __init__(self):
         self._cache: dict[str, list[float]] = {}  # key -> list of timestamps
+        self._is_rust = False
+
+    def check_many(self, request_data_list: list[dict]) -> list[bool]:
+        """Check rate limits across multiple request data dicts."""
+        return [self.allow_request(req) for req in request_data_list]
 
     def parse_rate(self) -> tuple[int, float] | None:
         """Parse rate string like '100/hour' to (100, 3600.0)."""
@@ -69,6 +74,22 @@ class UserRateThrottle(BaseThrottle):
     rate = "1000/hour"
 
     def get_ident(self, request_data):
+        """Return the user-scoped identifier used as the rate-limit key.
+
+        Reads the ``x-user-id`` header (typically populated by upstream
+        authentication middleware). Falls back to :meth:`BaseThrottle.get_ident`
+        (i.e. the client IP) when the header is absent so anonymous
+        traffic still gets throttled rather than sharing a single global
+        bucket.
+
+        Args:
+            request_data: The in-flight request envelope. The
+                ``x-user-id`` header is read.
+
+        Returns:
+            The user id string when present, otherwise the base-class
+            identifier (currently the client IP).
+        """
         return get_request_header(request_data, "x-user-id") or super().get_ident(request_data)
 
 
@@ -91,6 +112,24 @@ class ThrottleMiddleware(Middleware):
         self.throttles = [cls() for cls in (throttle_classes or [AnonRateThrottle])]
 
     async def process(self, request_data, call_next):
+        """Run the middleware chain and enforce every configured throttle.
+
+        Iterates the configured throttle classes in order. The first
+        throttle that returns ``False`` from :meth:`allow_request` short-
+        circuits with a 429 response and (when the throttle exposes a
+        wait estimate) a ``retry-after`` header. When every throttle
+        allows the request, it is forwarded to ``call_next``.
+
+        Args:
+            request_data: The in-flight request envelope. Each throttle
+                inspects it to derive its identifier.
+            call_next: Awaitable that invokes the next middleware /
+                handler and returns the downstream response dict.
+
+        Returns:
+            Either a 429 response when any throttle denies the request,
+            or the downstream response produced by ``call_next``.
+        """
         for throttle in self.throttles:
             if not throttle.allow_request(request_data):
                 wait = throttle.wait()

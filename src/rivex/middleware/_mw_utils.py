@@ -33,6 +33,25 @@ def apply_middleware_chain(
             _mw: Any = mw,
             _next: Callable = inner,
         ) -> dict:
+            """Run a single middleware instance and forward the result.
+
+            Dispatches to the middleware's ``process`` coroutine when
+            present (catching the case where the middleware only exposes
+            a plain callable). Awaits the result transparently so both
+            sync and async middlewares integrate seamlessly.
+
+            Args:
+                request_data: The in-flight request envelope. The
+                    closing ``*`` captures ``_mw`` (the middleware
+                    instance) and ``_next`` (the inner handler) per
+                    closure iteration.
+                _mw: The middleware instance to invoke.
+                _next: The wrapped handler / next middleware to call.
+
+            Returns:
+                The middleware's response dict (sync or async result
+                resolved transparently).
+            """
             process = getattr(_mw, "process", None)
             if callable(process):
                 result = process(request_data, _next)

@@ -21,10 +21,34 @@ hmac_sha512_verify = _rc.hmac_sha512_verify
 
 
 def aes_gcm_encrypt(key: bytes, plaintext: bytes) -> bytes:
+    """AES-256-GCM encrypt ``plaintext`` with ``key`` via the Rust core.
+
+    Thin wrapper over ``rivex_core.aes_gcm_encrypt``; the key must be 32
+    bytes and the returned buffer is ``nonce || ciphertext || tag``.
+
+    Args:
+        key: 32-byte (256-bit) symmetric key.
+        plaintext: Bytes to encrypt.
+
+    Returns:
+        The combined nonce, ciphertext, and GCM authentication tag.
+    """
     return bytes(_rc.aes_gcm_encrypt(key, plaintext))
 
 
 def aes_gcm_decrypt(key: bytes, ciphertext: bytes) -> bytes:
+    """AES-256-GCM decrypt ``ciphertext`` with ``key`` via the Rust core.
+
+    Thin wrapper over ``rivex_core.aes_gcm_decrypt``; raises whatever
+    the underlying core raises on authentication failure or short input.
+
+    Args:
+        key: 32-byte (256-bit) symmetric key.
+        ciphertext: A buffer produced by :func:`aes_gcm_encrypt`.
+
+    Returns:
+        The original plaintext bytes.
+    """
     return bytes(_rc.aes_gcm_decrypt(key, ciphertext))
 
 

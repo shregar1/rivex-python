@@ -170,7 +170,6 @@ from rivex import (
 rivex run main:app [--host H] [--port P] [--workers N] [--reload]
 rivex routes main:app
 rivex version
-rivex schemax …          # requires the `schemax` package
 ```
 → *Configuration & Deployment*
 

@@ -25,7 +25,7 @@ import socket
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from rivex.core.applications import Rivex
+    from rivex.applications.applications import Rivex
 
 
 _LANDING_CSS = """
@@ -88,12 +88,39 @@ pre { background: #0b0b0c; color: #fafafa; padding: 16px 18px;
 
 
 def _safe(value: Any) -> str:
+    """HTML-escape ``value`` for safe interpolation into the landing page template.
+
+    ``None`` is rendered as a literal em-dash so missing fields stand
+    out visually rather than as an empty cell. Other values are
+    ``str()``-coerced and quoted-escaped against the standard library's
+    :func:`html.escape` so attribute and text contexts are both safe.
+
+    Args:
+        value: Anything — typically app metadata, a hostname, or a
+            route path.
+
+    Returns:
+        An HTML-safe string. The em-dash character (``"—"``) signals
+        a missing value.
+    """
     if value is None:
         return "—"
     return html.escape(str(value), quote=True)
 
 
 def _http_method_class(method: str) -> str:
+    """Wrap ``method`` in the ``<span class="method">`` styling used by the routes table.
+
+    The span carries the orange accent colour defined in
+    ``_LANDING_CSS`` so the HTTP verb stands out from the path column
+    in the mounted-routes table.
+
+    Args:
+        method: The HTTP verb string (``"GET"``, ``"POST"``, …).
+
+    Returns:
+        A single HTML ``<span>`` element with the verb HTML-escaped.
+    """
     return f'<span class="method">{html.escape(method)}</span>'
 
 
@@ -230,10 +257,39 @@ def build_landing_page(app: Rivex) -> tuple[str, str]:
 
 
 def _admin_mounted(app: Rivex) -> bool:
+    """Return ``True`` when ``app`` was constructed with an admin URL configured.
+
+    Used by the landing page to decide whether to show the
+    "mount the admin dashboard" suggestion in the next-steps list.
+    Detection is best-effort: any non-empty ``admin_url`` attribute
+    counts as mounted, with no verification that the URL is reachable.
+
+    Args:
+        app: The :class:`rivex.applications.Rivex` instance to inspect.
+
+    Returns:
+        ``True`` when ``app.admin_url`` is a non-empty string,
+        ``False`` otherwise.
+    """
     return bool(getattr(app, "admin_url", None))
 
 
 def _codegen_mounted(app: Rivex) -> bool:
+    """Return ``True`` when the codegen plugin is wired into ``app``.
+
+    Always returns ``False`` today — there is no first-class
+    "codegen is mounted" flag yet, and the absence of one keeps the
+    landing page consistent with the (intentionally conservative)
+    install instructions we ship.
+
+    Args:
+        app: The :class:`rivex.applications.Rivex` instance to inspect.
+
+    Returns:
+        Currently always ``False``; placeholder kept so the landing
+        page's next-steps block can grow with the codegen plugin
+        without further changes.
+    """
     # No flag for this yet — we infer from the existence of any
     # ``services/`` or ``controllers/``-looking route.  Cheap heuristic.
     return False

@@ -27,7 +27,7 @@ from rivex import (
     Router,
     status,
 )
-from rivex.core._injection import _coerce, _normalize_response, build_handler_wrapper
+from rivex.di._injection import _coerce, _normalize_response, build_handler_wrapper
 from rivex.openapi.openapi import generate_openapi
 
 

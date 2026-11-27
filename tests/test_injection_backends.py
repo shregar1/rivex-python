@@ -1,5 +1,5 @@
-"""End-to-end tests verifying that all three body-schema backends
-(Pydantic, Schemax, Marshmallow) work uniformly as type annotations in
+"""End-to-end tests verifying that the body-schema backends
+(Pydantic, Marshmallow) work uniformly as type annotations in
 Rivex controller definitions — for ``Body()``, ``Form()``, ``Query()``,
 ``Path()``, ``Header()``, and ``Cookie()`` parameters.
 
@@ -7,10 +7,8 @@ The key guarantee from this suite:
 
     @app.post("/items")
     async def create(item: Body(SomePydanticModel)): ...         # works
-    async def create(item: Body(SomeSchemaxMessage)): ...        # works
     async def create(item: Body(SomeMarshmallowSchema)): ...     # works
     async def create(item: Form(SomePydanticModel)): ...         # works
-    async def create(item: Form(SomeSchemaxMessage)): ...        # works
     async def create(item: Form(SomeMarshmallowSchema)): ...     # works
 
 The ``Body()`` and ``Form()`` paths dispatch through
@@ -35,8 +33,8 @@ import pytest
 
 # conftest.py stubs ``rivex_core`` so the package imports cleanly even
 # without the compiled Rust extension.
-from rivex.core._injection import build_handler_wrapper  # noqa: E402
-from rivex.core.params import Body, Cookie, Header, Path, Query  # noqa: E402
+from rivex.di._injection import build_handler_wrapper  # noqa: E402
+from rivex.di.params import Body, Cookie, Header, Path, Query  # noqa: E402
 from rivex.web.uploads import File, Form, MultipartBody, UploadFile  # noqa: E402
 
 # ---------------------------------------------------------------------------
@@ -52,26 +50,6 @@ def _make_pyd_item_class():
         qty: int = 1
 
     return PydItem
-
-
-def _make_schemax_item_class():
-    from schemax.idl.codegen import render
-    from schemax.idl.parser import parse
-    from schemax.idl.runtime import Message
-
-    src = """
-package test.v1;
-
-message SchemaxItem {
-    string title = 1;
-    int64 qty = 2;
-}
-"""
-    file = parse(src)
-    code = render(file)
-    namespace: dict[str, Any] = {"Message": Message}
-    exec(code, namespace)
-    return namespace["SchemaxItem"]
 
 
 def _make_marshmallow_item_class():
@@ -92,14 +70,12 @@ def _make_marshmallow_item_class():
 # Use ``exec`` to put each class into the module namespace under its
 # real name, so type-hint resolution finds it by name.
 PydItem = _make_pyd_item_class()
-SchemaxItem = _make_schemax_item_class()
 MarshSchema = _make_marshmallow_item_class()
 
 # Re-bind under the original class names so handler annotations like
 # ``item: PydItem`` resolve to the same object that lives in the
 # factory function's closure.
 globals()["PydItem"] = PydItem
-globals()["SchemaxItem"] = SchemaxItem
 globals()["MarshSchema"] = MarshSchema
 
 
@@ -178,31 +154,6 @@ async def test_body_pydantic_validation_error_returns_422():
         )
     )
     assert result["status"] == 422
-
-
-# ---------------------------------------------------------------------------
-# Body() — Schemax
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.asyncio
-async def test_body_with_schemax_message():
-    pytest.importorskip("schemax", reason="schemax not installed")
-
-    async def handler(item: SchemaxItem):
-        d = item.to_dict() if hasattr(item, "to_dict") else {}
-        # Schemax stores field values keyed by tag number — extract title.
-        return {"raw": json.dumps(d, default=str), "title": d.get("1") or d.get("title")}
-
-    wrapper = build_handler_wrapper(handler, "/items", 201, False)
-    result = await wrapper(
-        _request(
-            method="POST",
-            path="/items",
-            body=b'{"title": "Gadget", "qty": 7}',
-        )
-    )
-    assert result["status"] == 201
 
 
 # ---------------------------------------------------------------------------
@@ -339,7 +290,7 @@ async def test_body_with_plain_dict():
 
 
 # ---------------------------------------------------------------------------
-# Form() — Pydantic / Schemax / Marshmallow
+# Form() — Pydantic / Marshmallow
 # ---------------------------------------------------------------------------
 
 
@@ -381,26 +332,6 @@ async def test_form_with_marshmallow_schema():
     )
     assert result["status"] == 201
     assert _json_of(result) == {"title": "Doorbell", "qty": 4}
-
-
-@pytest.mark.asyncio
-async def test_form_with_schemax_message():
-    pytest.importorskip("schemax", reason="schemax not installed")
-
-    async def handler(item: SchemaxItem = Form()):
-        d = item.to_dict() if hasattr(item, "to_dict") else {}
-        return {"raw": json.dumps(d, default=str)}
-
-    wrapper = build_handler_wrapper(handler, "/items", 201, False)
-    result = await wrapper(
-        _request(
-            method="POST",
-            path="/items",
-            body=b"title=Lamp&qty=5",
-            content_type="application/x-www-form-urlencoded",
-        )
-    )
-    assert result["status"] == 201
 
 
 @pytest.mark.asyncio
@@ -640,15 +571,13 @@ async def test_multipart_body_alias_is_form():
     assert _json_of(result) == {"title": "Gadget", "filename": "a.bin"}
 
 
-def test_bodies_classify_all_three_backends():
+def test_bodies_classify_backends():
     pytest.importorskip("pydantic", reason="pydantic not installed")
-    pytest.importorskip("schemax", reason="schemax not installed")
     pytest.importorskip("marshmallow", reason="marshmallow not installed")
 
-    from rivex.core._bodies import body_schema
+    from rivex.serialization._bodies import body_schema
 
     assert body_schema(PydItem) == "pydantic"
-    assert body_schema(SchemaxItem) == "schemax"
     assert body_schema(MarshSchema) == "marshmallow"
 
 

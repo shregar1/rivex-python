@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 
-from rivex.core._compat import get_request_header, json_error_response
+from rivex.native._compat import get_request_header, json_error_response
 from rivex.middleware.middleware import Middleware
 
 
@@ -23,7 +23,7 @@ class IsAuthenticated(Guard):
     """Requires Authorization header."""
 
     def __call__(self, request_data):
-        from rivex.core.exceptions import HTTPException
+        from rivex.exceptions.http.exceptions import HTTPException
 
         if not get_request_header(request_data, "authorization"):
             raise HTTPException(401, "Not authenticated")
@@ -37,7 +37,7 @@ class RequiresRoles(Guard):
         self.required = set(roles)
 
     def __call__(self, request_data):
-        from rivex.core.exceptions import HTTPException
+        from rivex.exceptions.http.exceptions import HTTPException
 
         roles_header = get_request_header(request_data, "x-user-roles") or ""
         user_roles = {r.strip() for r in roles_header.split(",") if r.strip()}
@@ -53,7 +53,7 @@ class AllowAll(Guard):
 
 class DenyAll(Guard):
     def __call__(self, request_data):
-        from rivex.core.exceptions import HTTPException
+        from rivex.exceptions.http.exceptions import HTTPException
 
         raise HTTPException(403, "Access denied")
 
@@ -65,7 +65,26 @@ class GuardMiddleware(Middleware):
         self._guards = [g() if isinstance(g, type) else g for g in guards]
 
     async def process(self, request_data, call_next):
-        from rivex.core.exceptions import HTTPException
+        """Run every configured guard against the request before delegating.
+
+        Instantiates each :class:`Guard` (or reuses a pre-built instance),
+        invokes it with the live ``request_data``, awaits the result if it
+        is a coroutine, and converts any :class:`HTTPException` raised by
+        a guard into a JSON error response. Continues to the downstream
+        handler only when all guards pass.
+
+        Args:
+            request_data: The in-flight request envelope as carried by
+                the middleware chain.
+            call_next: Awaitable that invokes the next middleware or
+                route handler and returns the downstream response dict.
+
+        Returns:
+            The downstream response dict on success, or a JSON error
+            response dict built from the first guard's
+            :class:`HTTPException`.
+        """
+        from rivex.exceptions.http.exceptions import HTTPException
 
         for g in self._guards:
             try:

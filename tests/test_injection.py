@@ -3,7 +3,7 @@ import json
 import pytest
 
 from rivex import HTTPException
-from rivex.core._injection import _coerce, _normalize_response, build_handler_wrapper
+from rivex.di._injection import _coerce, _normalize_response, build_handler_wrapper
 
 
 def _json_body(result):
@@ -149,8 +149,8 @@ async def test_handler_wrapper_body_model():
 async def test_post_handler_with_no_body_param_accepts_empty_body():
     """Handlers with no body parameter (e.g. ``POST /things/{id}/restore``)
     must accept an empty request body cleanly."""
-    from rivex.core.params import Path
-    from rivex.core.requests import Request
+    from rivex.di.params import Path
+    from rivex.http.requests import Request
 
     async def handler(request: Request, version_id: int = Path(ge=1)):
         return {"version_id": version_id, "method": request.method}
@@ -198,7 +198,7 @@ async def test_optional_int_query_with_ge_constraint():
     ``ge`` bound, otherwise the raw query-string ``"42"`` is compared
     against ``1`` and raises ``TypeError`` from the str/int comparison.
     """
-    from rivex.core.params import Query
+    from rivex.di.params import Query
 
     async def handler(design_id: int | None = Query(default=None, ge=1)):
         return {"design_id": design_id, "is_int": isinstance(design_id, int)}
@@ -221,7 +221,7 @@ async def test_optional_int_query_with_ge_constraint():
 
 @pytest.mark.asyncio
 async def test_optional_int_query_absent_uses_default():
-    from rivex.core.params import Query
+    from rivex.di.params import Query
 
     async def handler(design_id: int | None = Query(default=None, ge=1)):
         return {"design_id": design_id}
@@ -243,7 +243,7 @@ async def test_optional_int_query_absent_uses_default():
 
 @pytest.mark.asyncio
 async def test_optional_int_query_violates_ge_bound():
-    from rivex.core.params import Query
+    from rivex.di.params import Query
 
     async def handler(design_id: int | None = Query(default=None, ge=10)):
         return {"design_id": design_id}
@@ -285,7 +285,7 @@ async def test_handler_wrapper_sync_function():
 
 @pytest.mark.asyncio
 async def test_handler_wrapper_http_exception():
-    from rivex.core.exceptions import HTTPException
+    from rivex.exceptions.http.exceptions import HTTPException
 
     async def handler():
         raise HTTPException(404, detail="not found")

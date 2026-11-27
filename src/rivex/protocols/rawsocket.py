@@ -54,22 +54,43 @@ class RawTCPServer:
 
     @property
     def on_connect(self) -> Callable | None:
+        """Return the currently registered connect handler, if any."""
         return self._on_connect
 
     @on_connect.setter
     def on_connect(self, func: Callable) -> None:
+        """Register the connect handler and alias it as the main handler.
+
+        Args:
+            func: Async callable invoked once per accepted client.
+        """
         self._on_connect = func
         self._handler = func
 
     @property
     def on_disconnect(self) -> Callable | None:
+        """Return the currently registered disconnect handler, if any."""
         return self._on_disconnect
 
     @on_disconnect.setter
     def on_disconnect(self, func: Callable) -> None:
+        """Register the disconnect handler.
+
+        Args:
+            func: Async callable invoked with the peer ``address`` tuple
+                after the writer has been closed.
+        """
         self._on_disconnect = func
 
     async def _handle_client(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        """Drive a single accepted TCP client through its lifecycle.
+
+        Invokes ``self._on_connect`` with the stream pair, then
+        unconditionally closes the writer and finally invokes
+        ``self._on_disconnect`` with the peer address. Handler errors
+        are logged but never re-raised so the surrounding server loop
+        keeps accepting new clients.
+        """
         peer = writer.get_extra_info("peername")
         try:
             if self._on_connect:
@@ -86,6 +107,14 @@ class RawTCPServer:
                 await self._on_disconnect(peer)
 
     async def _run_server(self) -> None:
+        """Run the TCP server until cancelled.
+
+        Builds an SSL context from ``ssl_cert`` / ``ssl_key`` when both
+        are configured, opens ``asyncio.start_server`` on the bound
+        ``host`` / ``port``, then enters ``serve_forever`` until the
+        server is closed. Errors during startup are logged and the
+        coroutine returns.
+        """
         ssl_context = None
         if self._ssl_cert and self._ssl_key:
             ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
@@ -107,10 +136,22 @@ class RawTCPServer:
             logger.error(f"TCP server error: {e}")
 
     def start(self) -> None:
+        """Launch the TCP server on a dedicated daemon thread.
+
+        The thread installs a fresh asyncio event loop, runs
+        ``_run_server`` to completion and blocks in ``run_forever`` so
+        the server keeps accepting clients. Already-running servers
+        are left as-is.
+        """
         if self._running:
             return
 
         def target():
+            """Thread entry point: build a loop and execute ``_run_server``.
+
+            Each server instance gets its own loop so that multiple
+            servers can coexist without sharing asyncio primitives.
+            """
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             loop.run_until_complete(self._run_server())
@@ -119,6 +160,13 @@ class RawTCPServer:
         self._thread.start()
 
     def stop(self) -> None:
+        """Stop the TCP server.
+
+        Closes the underlying ``asyncio.Server`` so the
+        ``serve_forever`` awaitable in ``_run_server`` returns. The
+        ``_running`` flag is reset and the closure of an individual
+        client writer happens inside ``_handle_client``.
+        """
         self._running = False
         if self._server:
             self._server.close()
@@ -151,13 +199,25 @@ class UnixSocketServer:
 
     @property
     def on_connect(self) -> Callable | None:
+        """Return the currently registered Unix-socket handler."""
         return self._handler
 
     @on_connect.setter
     def on_connect(self, func: Callable) -> None:
+        """Register the handler invoked for each accepted Unix-socket client.
+
+        Args:
+            func: Async callable accepting ``(reader, writer)``.
+        """
         self._handler = func
 
     async def _handle_client(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        """Drive a single accepted Unix-socket client through its lifecycle.
+
+        Invokes ``self._handler`` (if set) and then closes the writer.
+        Handler exceptions are logged and swallowed so the server keeps
+        accepting further connections.
+        """
         try:
             if self._handler:
                 await self._handler(reader, writer)
@@ -171,6 +231,14 @@ class UnixSocketServer:
                 pass
 
     async def _run_server(self) -> None:
+        """Run the Unix-socket server until cancelled.
+
+        Removes any pre-existing socket file at ``self._path``, opens
+        ``asyncio.start_unix_server``, loosens them to mode ``0o777``
+        so any local process may connect, and finally enters
+        ``serve_forever``. Startup errors are logged and the coroutine
+        returns cleanly.
+        """
         if os.path.exists(self._path):
             os.unlink(self._path)
 
@@ -189,10 +257,21 @@ class UnixSocketServer:
             logger.error(f"Unix socket server error: {e}")
 
     def start(self) -> None:
+        """Launch the Unix-socket server on a dedicated daemon thread.
+
+        The thread installs a fresh asyncio event loop and runs
+        ``_run_server`` to completion. Already-running servers are
+        left as-is.
+        """
         if self._running:
             return
 
         def target():
+            """Thread entry point: build a loop and execute ``_run_server``.
+
+            Each Unix-socket server gets its own loop so that multiple
+            servers can coexist without sharing asyncio primitives.
+            """
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             loop.run_until_complete(self._run_server())
@@ -201,6 +280,13 @@ class UnixSocketServer:
         self._thread.start()
 
     def stop(self) -> None:
+        """Stop the Unix-socket server.
+
+        Closes the underlying ``asyncio.Server`` so the
+        ``serve_forever`` awaitable in ``_run_server`` returns. The
+        ``_running`` flag is reset and per-client writer cleanup
+        happens inside ``_handle_client``.
+        """
         self._running = False
         if self._server:
             self._server.close()
@@ -233,17 +319,39 @@ class UDPBroadcastServer:
 
     @property
     def on_message(self) -> Callable | None:
+        """Return the currently registered datagram handler, if any."""
         return self._on_message
 
     @on_message.setter
     def on_message(self, func: Callable) -> None:
+        """Register the datagram handler invoked for every incoming UDP packet.
+
+        Args:
+            func: Async callable accepting ``(data, addr)``.
+        """
         self._on_message = func
 
     class _UDPProtocol(asyncio.DatagramProtocol):
         def __init__(self, server: UDPBroadcastServer):
+            """Store the owning server so callbacks can reach the handler.
+
+            Args:
+                server: The :class:`UDPBroadcastServer` that owns this
+                    protocol instance.
+            """
             self._server = server
 
         def datagram_received(self, data: bytes, addr: tuple) -> None:
+            """Forward an incoming datagram to the server's handler.
+
+            Schedules ``self._server._on_message(data, addr)`` on the
+            running event loop. Errors raised while scheduling are
+            swallowed so the transport stays open.
+
+            Args:
+                data: The raw datagram payload.
+                addr: ``(host, port)`` tuple of the sender.
+            """
             if self._server._on_message:
                 try:
                     loop = asyncio.get_event_loop()
@@ -252,13 +360,34 @@ class UDPBroadcastServer:
                     pass
 
         def error_received(self, exc: Exception) -> None:
+            """Log a transport-level error reported by asyncio.
+
+            Args:
+                exc: The exception that triggered the callback.
+            """
             logger.error(f"UDP error: {exc}")
 
     async def send(self, data: bytes, addr: tuple[str, int]) -> None:
+        """Send a single datagram to the supplied address.
+
+        No-op when the transport has not been created yet.
+
+        Args:
+            data: Payload bytes to transmit.
+            addr: ``(host, port)`` destination tuple.
+        """
         if self._transport:
             self._transport.sendto(data, addr)
 
     async def _run_server(self) -> None:
+        """Bind the UDP transport and keep the loop alive.
+
+        Creates a datagram endpoint on ``self._host`` / ``self._port``
+        using :class:`_UDPProtocol` and stores the transport/protocol
+        handles on the instance. The coroutine returns immediately so
+        the caller can park the event loop with ``run_forever`` and
+        keep the socket listening indefinitely.
+        """
         loop = asyncio.get_running_loop()
         self._protocol = self._UDPProtocol(self)
         self._transport, _ = await loop.create_datagram_endpoint(
@@ -269,10 +398,24 @@ class UDPBroadcastServer:
         logger.info(f"UDP server listening on {self._host}:{self._port}")
 
     def start(self) -> None:
+        """Launch the UDP server on a dedicated daemon thread.
+
+        The thread installs a fresh asyncio event loop, runs
+        ``_run_server`` to bind the socket, and parks the loop with
+        ``run_forever`` so it keeps dispatching datagrams. Already
+        running servers are left as-is.
+        """
         if self._running:
             return
 
         def target():
+            """Thread entry point: bind the socket then park the loop.
+
+            Builds a dedicated loop, drives ``_run_server`` to bind the
+            datagram transport, then enters ``run_forever`` so the
+            transport keeps delivering incoming datagrams until the
+            thread is torn down by :meth:`stop`.
+            """
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             loop.run_until_complete(self._run_server())
@@ -282,7 +425,13 @@ class UDPBroadcastServer:
         self._thread.start()
 
     def stop(self) -> None:
+        """Stop the UDP server.
+
+        Closes the underlying ``asyncio.DatagramTransport`` so the
+        thread's ``run_forever`` loop eventually exits. The
+        ``_running`` flag is reset to allow a subsequent ``start``.
+        """
         self._running = False
         if self._transport:
             self._transport.close()
-            logger.info("UDP server stopped")
+        logger.info("UDP server stopped")

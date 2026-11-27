@@ -11,7 +11,7 @@ pip install rivex
 This pulls in the framework along with its core dependencies:
 
 - **`rivex-core`** — the compiled Rust extension (the HTTP server, JSON encoder, hashing, JWT, and validators). Prebuilt wheels are published for common platforms, so no Rust toolchain is needed to install.
-- **`pydantic>=2.0`** — used for model validation and interoperable with Rivex's own `Schema`.
+- **`pydantic>=2.0`** — used for model validation and interoperable with  own `Schema`.
 - **`orjson>=3.9`** — fast JSON serialization.
 
 ## Optional extras
@@ -19,10 +19,7 @@ This pulls in the framework along with its core dependencies:
 Some capabilities pull in extra packages. Install them with extras syntax:
 
 ```bash
-# Schemax IDL toolchain (`rivex.schemax` shim + `rivex schemax …` CLI)
-pip install "rivex[schemax]"
-
-# Development tooling: pytest, httpx, mypy, ruff, schemax
+# Development tooling: pytest, httpx, mypy, ruff
 pip install "rivex[dev]"
 ```
 
@@ -32,7 +29,6 @@ A few features integrate with libraries you install yourself when you need them:
 | --- | --- |
 | HTML templates (`Jinja2Templates`) | `jinja2` |
 | OpenTelemetry tracing export (`OTelSpanExporter`) | `opentelemetry-sdk` |
-| Schemax IDL | `schemax` (or the `schemax` extra) |
 
 If an optional dependency is missing, Rivex degrades gracefully — for example, tracing falls back to a console exporter when OpenTelemetry isn't installed.
 

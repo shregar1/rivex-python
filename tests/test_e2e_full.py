@@ -607,7 +607,7 @@ def build_app() -> Rivex:
 
     @app.get("/responses/file")
     async def resp_file():
-        from rivex.core.responses import FileResponse
+        from rivex.http.responses import FileResponse
 
         path = os.path.join(tempfile.gettempdir(), "rivex_test_file.txt")
         with open(path, "w") as f:
@@ -1723,8 +1723,8 @@ class TestStatusCodes:
         assert APIStatus.UNPROCESSABLE_ENTITY == 422
 
     def test_http_method(self):
-        assert HTTPMethod.GET.value == "GET"
-        assert HTTPMethod.POST.value == "POST"
+        assert HTTPMethod.GET == "GET"
+        assert HTTPMethod.POST == "POST"
 
 
 # ============================================================================

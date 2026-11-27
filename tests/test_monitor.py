@@ -254,7 +254,7 @@ class TestMonitorWebrtc:
 # ---------------------------------------------------------------------------
 
 
-class TestMonitorGrpc:
+class TestMonitorGRPC:
     async def _fetch(self, ctx):
         return await _REGISTRY.partials["monitor_grpc"](ctx)
 

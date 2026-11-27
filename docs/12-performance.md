@@ -1,6 +1,6 @@
 # High-Performance JSON
 
-For endpoints that return large, regular JSON arrays, the bottleneck is rarely your logic — it's building thousands of Python dicts and serializing them. Rivex's `gen` API sidesteps that entirely: it constructs the JSON **in Rust**, producing finished bytes without ever materializing the intermediate Python objects.
+For endpoints that return large, regular JSON arrays, the bottleneck is rarely your logic — it's building thousands of Python dicts and serializing them.  `gen` API sidesteps that entirely: it constructs the JSON **in Rust**, producing finished bytes without ever materializing the intermediate Python objects.
 
 ## The idea
 
@@ -83,7 +83,7 @@ gen.csv(3, id=F.index, name=F.fmt("User {}"), score=F.mul(10))
 
 ## Content negotiation
 
-Pair `gen` with Rivex's negotiation helpers to serve the format the client asked for:
+Pair `gen` with  negotiation helpers to serve the format the client asked for:
 
 ```python
 from rivex import Request

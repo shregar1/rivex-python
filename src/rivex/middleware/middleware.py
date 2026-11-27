@@ -2,14 +2,14 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from rivex.core._compat import (
+from rivex.native._compat import (
     RC_V2,
     apply_compressed_headers,
     client_ip,
     get_request_header,
     json_error_response,
 )
-from rivex.core._compat import (
+from rivex.native._compat import (
     rc as _rc,
 )
 
@@ -267,65 +267,7 @@ class MaxBodySizeMiddleware(Middleware):
             return json_error_response(413, "Request body too large")
         return await call_next(request_data)
 
-
-class RateLimitMiddleware(Middleware):
-    """Token-bucket rate limiter with per-IP, per-user, and global buckets.
-
-    The *strategy* controls which key is used to identify the client:
-    ``"ip"`` (default), ``"user"`` (JWT sub claim), or ``"global"``.
-
-    Multiple instances can be stacked for different limit tiers::
-
-        # IP-based: 100 req/min
-        app.add_middleware(RateLimitMiddleware, rate=100, per=60)
-
-        # User-based: 1000 req/min
-        app.add_middleware(RateLimitMiddleware, rate=1000, per=60, strategy="user")
-    """
-
-    def __init__(
-        self,
-        rate: int = 100,
-        per: float = 60.0,
-        strategy: str = "ip",
-        key_header: str | None = None,
-    ):
-        self.rate = rate
-        self.per = per
-        self.strategy = strategy
-        self.key_header = key_header
-        self._buckets: dict[str, list] = {}
-
-    def _key(self, request_data: dict) -> str:
-        if self.strategy == "user":
-            for k, v in request_data.get("headers", []):
-                if k.lower() == "authorization":
-                    return v
-            return "anonymous"
-        if self.strategy == "global":
-            return "_global"
-        if self.key_header:
-            val = get_request_header(request_data, self.key_header)
-            if val:
-                return val
-        return client_ip(request_data)
-
-    async def process(self, request_data: dict, call_next):
-        import time
-
-        key = self._key(request_data)
-        now = time.monotonic()
-        bucket = self._buckets.setdefault(key, [0.0, self.rate])
-        last, tokens = bucket
-        elapsed = now - last
-        tokens = min(self.rate, tokens + elapsed * (self.rate / self.per))
-        if tokens < 1:
-            resp = json_error_response(429, "Too Many Requests")
-            resp["headers"].append(("retry-after", str(int(self.per / self.rate))))
-            return resp
-        bucket[0] = now
-        bucket[1] = tokens - 1
-        return await call_next(request_data)
+from rivex.middleware.rate_limit import RateLimitMiddleware
 
 
 class AccessLogMiddleware(Middleware):
@@ -577,8 +519,8 @@ class IdempotencyMiddleware(Middleware):
 
 
 class MethodOverrideMiddleware(Middleware):
-    def __init__(self, header_name: str = "X-HTTP-Method-Override"):
-        self._header = header_name.lower()
+    def __init__(self, header: str = "x-http-method-override"):
+        self._header = header
 
     async def process(self, request_data: dict, call_next: Callable) -> dict:
         override = get_request_header(request_data, self._header)
@@ -587,3 +529,7 @@ class MethodOverrideMiddleware(Middleware):
             request_data["method"] = override.upper()
         result: dict = await call_next(request_data)
         return result
+
+
+# Re-exported so existing ``from rivex.middleware import RequestContextMiddleware`` paths keep working.
+from rivex.middleware.request_context import RequestContextMiddleware as RequestContextMiddleware

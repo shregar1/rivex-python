@@ -18,7 +18,7 @@ release, then is no longer supported.
 ## Reporting a vulnerability
 
 **Please do not file a public issue.** Instead, report privately by email to
-**sengarsinghshreyansh@gmail.com**. Include:
+**<sengarsinghshreyansh@gmail.com>**. Include:
 
 - A clear description of the issue and the impact you observed.
 - Steps to reproduce — preferably a minimal `app.py` that triggers the bug.
@@ -60,7 +60,7 @@ the application's responsibility, not the framework's.
 - Always pin a specific Rivex version in production (`rivex==0.2.0`, not
   `rivex>=0.2`).
 - Run behind a reverse proxy (nginx, Caddy, Envoy) that terminates TLS.
-  Rivex's built-in server speaks plain HTTP for the worker processes.
+   built-in server speaks plain HTTP for the worker processes.
 - Set a strong `admin_token` if you enable the `rivex[admin]` dashboard,
   and put the dashboard behind a private network or VPN.
 - Set `csrf=True` (the default) on `CSRFMiddleware` for any browser-facing

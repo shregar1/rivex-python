@@ -52,7 +52,7 @@ from importlib import metadata
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from rivex.core.applications import Rivex
+    from rivex.applications.applications import Rivex
 
 
 class Plugin:
@@ -81,9 +81,33 @@ class Plugin:
     name: str = ""
 
     def install(self, app: Rivex) -> None:
+        """Attach this plugin's routes, middleware, and hooks to *app*.
+
+        Subclasses override this method to register whatever they expose
+        to the framework — additional ``app.get`` / ``app.post``
+        routes, ``app.add_middleware`` calls, before/after hooks,
+        etc. The base implementation raises so a forgotten override
+        is loud rather than silent.
+
+        Args:
+            app: The :class:`Rivex` application the plugin is being
+                attached to. The plugin may mutate ``app`` to
+                register its surfaces.
+        """
         raise NotImplementedError
 
     def uninstall(self, app: Rivex) -> None:
+        """Remove this plugin's surfaces from *app*.
+
+        The base implementation is a no-op so that simple plugins
+        without a teardown phase need not override this method.
+        Subclasses can use it to deregister routes, drop middleware,
+        or otherwise undo whatever :meth:`install` set up.
+
+        Args:
+            app: The :class:`Rivex` application the plugin should
+                detach from.
+        """
         pass
 
 

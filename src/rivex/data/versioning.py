@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from rivex.core._compat import get_request_header
+from rivex.native._compat import get_request_header
 from rivex.middleware.middleware import Middleware
 
 

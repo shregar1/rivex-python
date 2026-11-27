@@ -51,7 +51,6 @@ The package installs a `rivex` command:
 | `rivex run main:app` | Run the server (`--host`, `--port`, `--workers`, `--reload`) |
 | `rivex routes main:app` | Print every registered route |
 | `rivex version` | Show the installed version |
-| `rivex schemax …` | Schemax IDL toolchain (requires the `schemax` package) |
 
 ```bash
 # Development: live reload on file changes

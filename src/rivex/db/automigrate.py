@@ -38,6 +38,21 @@ class AutoMigrator:
             return {r["name"] for r in rows}
 
     async def _get_table_columns(self, table: str) -> list[dict]:
+        """Return the column descriptors currently defined for *table*.
+
+        Tries the PostgreSQL ``INFORMATION_SCHEMA.columns`` view first
+        and falls back to an empty list if the query fails — most often
+        because the backend is SQLite which exposes a different schema
+        catalogue.
+
+        Args:
+            table: Name of the table whose columns should be read.
+
+        Returns:
+            A list of column descriptor dicts with keys ``name``,
+            ``type``, ``nullable``, ``default`` and ``max_length``. Empty
+            when the lookup fails or the table does not exist.
+        """
         try:
             rows = await self._pool.fetch(
                 "SELECT column_name, data_type, is_nullable, "
@@ -72,7 +87,7 @@ class AutoMigrator:
 
         # Discover declared models from app.db.models()
         try:
-            from rivex.core.applications import Rivex
+            from rivex.applications.applications import Rivex
             app = Rivex.get_current()
         except Exception:
             return {"add_tables": [], "drop_tables": [], "add_columns": [], "drop_columns": []}
@@ -118,12 +133,35 @@ class AutoMigrator:
         }
 
     def _col_to_sql(self, col: dict) -> str:
+        """Render a single column descriptor as a SQL column definition.
+
+        Args:
+            col: Column descriptor with ``name``, ``type``, optional
+                ``nullable`` and ``default`` keys.
+
+        Returns:
+            The SQL fragment for the column, including type, nullability
+            and default clauses.
+        """
         col_type = col.get("type", "TEXT").upper()
         nullable = "" if col.get("nullable", True) else " NOT NULL"
         default = f" DEFAULT {col['default']}" if col.get("default") else ""
         return f"{col['name']} {col_type}{nullable}{default}"
 
     def generate_sql(self, plan: dict) -> str:
+        """Translate a migration plan into a single SQL script.
+
+        The plan is rendered in the order ``add_tables``,
+        ``drop_tables``, ``add_columns`` and ``drop_columns``. Each
+        statement is terminated with a semicolon and the result is the
+        statements joined by newlines.
+
+        Args:
+            plan: Migration plan as produced by :meth:`detect_changes`.
+
+        Returns:
+            The SQL text ready to be written to disk or executed.
+        """
         lines: list[str] = []
         for table, cols in plan.get("add_tables", []):
             col_defs = ", ".join(self._col_to_sql(c) for c in cols)
@@ -137,6 +175,21 @@ class AutoMigrator:
         return "\n".join(lines)
 
     async def write_migration(self, name: str, plan: dict | None = None) -> str:
+        """Generate the SQL for *plan* and write it to a timestamped file.
+
+        When *plan* is omitted the current schema diff is detected via
+        :meth:`detect_changes`. The destination filename is composed of
+        the current UTC timestamp and *name*, and the migrations
+        directory is created on demand.
+
+        Args:
+            name: Short slug appended to the timestamp; used as the
+                migration's logical name.
+            plan: Optional pre-computed migration plan.
+
+        Returns:
+            The path of the written migration file as a string.
+        """
         if plan is None:
             plan = await self.detect_changes()
         sql = self.generate_sql(plan)
@@ -148,6 +201,18 @@ class AutoMigrator:
         return str(migration_path)
 
     async def apply(self, migration_file: str) -> dict:
+        """Execute the SQL in *migration_file* statement by statement.
+
+        Args:
+            migration_file: Path to a ``.sql`` file with semicolon
+                separated DDL statements.
+
+        Returns:
+            A dict with ``"applied"`` (list of statement previews that
+            succeeded) and ``"errors"`` (list of ``{"statement", "error"}``
+            entries for statements that failed). Execution continues past
+            individual failures.
+        """
         sql = Path(migration_file).read_text()
         statements = [s.strip() for s in sql.split(";") if s.strip()]
         results = {"applied": [], "errors": []}
@@ -160,6 +225,16 @@ class AutoMigrator:
         return results
 
     def print_plan(self, plan: dict) -> str:
+        """Return a human-readable rendering of *plan*.
+
+        Args:
+            plan: Migration plan as produced by :meth:`detect_changes`.
+
+        Returns:
+            A multi-line summary suitable for printing to a terminal. If
+            the plan is empty in every category the string
+            ``"No changes detected."`` is returned instead.
+        """
         lines: list[str] = ["Migration Plan:"]
         for table, cols in plan.get("add_tables", []):
             lines.append(f"  + CREATE TABLE {table} ({len(cols)} columns)")

@@ -3,10 +3,10 @@
 import pytest
 
 from rivex import Rivex, TestClient
-from rivex.core.dependencies import Depends
+from rivex.di.dependencies import Depends
 from rivex.middleware.middleware import MethodOverrideMiddleware
-from rivex.core.requests import Request
-from rivex.core.responses import XMLResponse
+from rivex.http.requests import Request
+from rivex.http.responses import XMLResponse
 
 # ── 1. Yield Dependencies ──
 
@@ -134,7 +134,7 @@ def test_custom_serializer():
 
 
 def test_custom_serializer_with_response():
-    from rivex.core.responses import JSONResponse
+    from rivex.http.responses import JSONResponse
 
     resp = JSONResponse({"msg": "hi"})
     raw = resp._to_raw()
@@ -440,7 +440,7 @@ def test_jwt_bearer_no_token():
 
 
 def test_router_before_request():
-    from rivex.core.routing import Router
+    from rivex.web.routing import Router
 
     app = Rivex()
     router = Router(prefix="/api")
@@ -462,7 +462,7 @@ def test_router_before_request():
 
 
 def test_router_after_request():
-    from rivex.core.routing import Router
+    from rivex.web.routing import Router
 
     app = Rivex()
     router = Router(prefix="/api")

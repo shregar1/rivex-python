@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from rivex.core._compat import get_request_header
+from rivex.native._compat import get_request_header
 from rivex.middleware.middleware import Middleware
 
 
@@ -74,6 +74,25 @@ class CSPMiddleware(Middleware):
         self._block_all_mixed_content = block_all_mixed_content
 
     def _build_policy(self, overrides: dict[str, list[str]] | None = None) -> str:
+        """Render the ``Content-Security-Policy`` header value for this request.
+
+        Starts from the constructor-time ``_directives`` map, then
+        applies any caller-supplied per-route ``overrides`` (a value of
+        ``None`` removes that directive). Adds ``report-uri`` when
+        configured, and appends the boolean directives
+        ``upgrade-insecure-requests`` / ``block-all-mixed-content``
+        when enabled. The result is rendered as
+        ``"<directive> <value>"`` pairs joined with ``"; "``.
+
+        Args:
+            overrides: Optional per-request directive overrides. Keys
+                not in the base map are added; keys whose value is
+                ``None`` are removed.
+
+        Returns:
+            The policy header value as a string, ready to be emitted
+            via :class:`Headers`.
+        """
         directives = dict(self._directives)
         if overrides:
             for name, values in overrides.items():
@@ -96,6 +115,28 @@ class CSPMiddleware(Middleware):
         return "; ".join(parts)
 
     async def process(self, request_data: dict, call_next: Callable) -> dict:
+        """Run the middleware chain and stamp the response with the CSP header.
+
+        Awaits ``call_next`` to obtain the downstream response, reads
+        the per-request ``csp_directives`` overrides from
+        ``request_data["state"]`` (when present), and emits either
+        ``Content-Security-Policy`` or
+        ``Content-Security-Policy-Report-Only`` (depending on the
+        constructor's ``report_only`` flag) on the response. When the
+        response already has a ``headers`` mapping the policy is merged
+        in (other entries are preserved).
+
+        Args:
+            request_data: The in-flight request envelope. Only the
+                ``state`` field is read for per-request overrides.
+            call_next: Awaitable that invokes the next middleware /
+                handler and returns the downstream response dict.
+
+        Returns:
+            The downstream response dict, with the CSP header merged
+            into ``headers`` (or copied under a new dict when the
+            existing ``headers`` was a mapping).
+        """
         result: dict = await call_next(request_data)
         state = request_data.get("state", {})
         overrides = state.get("csp_directives") if isinstance(state, dict) else None

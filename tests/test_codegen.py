@@ -232,34 +232,8 @@ def test_generate_resource_pydantic_backend_emits_single_dto_file(tmp_path: Path
     assert "ListItemsRequest" in content
     assert "ItemResponse" in content
     assert "ListItemsResponse" in content
-    # No schemax or marshmallow specific files
-    assert "schemas/items.schemax" not in paths
+    # No marshmallow specific files
     assert "dtos/items/schemas.py" not in paths
-
-
-def test_generate_resource_schemax_backend_emits_idl_file(tmp_path: Path) -> None:
-    """The Schemax backend emits a ``.schemax`` IDL file + a generated module."""
-    spec = _example_spec()
-    plan = _codegen.generate_resource(spec, project_root=tmp_path, schema="schemax")
-    paths = {f.path for f in plan.files}
-    by_path = {f.path: f for f in plan.files}
-
-    # IDL file is the source of truth
-    assert "schemas/items.schemax" in paths
-    idl_content = by_path["schemas/items.schemax"].content
-    assert "package items.v1" in idl_content
-    assert "message Item {" in idl_content
-    assert "message CreateItemRequest {" in idl_content
-    assert "message GetItemRequest {" in idl_content
-    assert "rpc" in idl_content
-    assert "service ItemService" in idl_content
-
-    # The controller imports from the generated module, not a Pydantic DTO
-    controller = by_path["controllers/items/items_controller.py"].content
-    assert "from schemas.items_pb import" in controller
-    assert "CreateItemRequest.from_dict" in controller
-    # No Pydantic imports in the controller
-    assert "from dtos.items.requests import" not in controller
 
 
 def test_generate_resource_marshmallow_backend_emits_schemas_file(tmp_path: Path) -> None:
@@ -284,36 +258,12 @@ def test_generate_resource_marshmallow_backend_emits_schemas_file(tmp_path: Path
     assert "from dtos.items.schemas import" in controller
     # No Pydantic imports
     assert "from dtos.items.requests import" not in controller
-    # No schemax imports
-    assert "from schemas.items_pb import" not in controller
 
 
 def test_generate_resource_rejects_unknown_schema(tmp_path: Path) -> None:
     spec = _example_spec()
     with pytest.raises(ValueError):
         _codegen.generate_resource(spec, project_root=tmp_path, schema="xmlschema")
-
-
-def test_generate_resource_schemax_idl_is_valid(tmp_path: Path) -> None:
-    """The generated IDL must parse cleanly with the schemax IDL parser."""
-    pytest.importorskip("schemax", reason="schemax not installed")
-    spec = _example_spec()
-    plan = _codegen.generate_resource(spec, project_root=tmp_path, schema="schemax")
-    by_path = {f.path: f for f in plan.files}
-    idl = by_path["schemas/items.schemax"].content
-
-    from schemax.idl.parser import parse
-
-    file = parse(idl)
-    assert file.package == "items.v1"
-    msg_names = {m.name for m in file.messages}
-    assert "Item" in msg_names
-    assert "CreateItemRequest" in msg_names
-    assert "UpdateItemRequest" in msg_names
-    assert "GetItemRequest" in msg_names
-    assert "DeleteItemRequest" in msg_names
-    assert "ListItemsRequest" in msg_names
-    assert "ListItemsResponse" in msg_names
 
 
 def test_generate_resource_marshmallow_schemas_parse(tmp_path: Path) -> None:

@@ -24,7 +24,7 @@ from typing import Any
 
 import pytest
 
-from rivex.core.applications import Rivex
+from rivex.applications.applications import Rivex
 from rivex.testing.testing import TestClient
 
 

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from rivex import Rivex, TestClient
-from rivex.core.dependencies import Depends
+from rivex.di.dependencies import Depends
 
 
 async def real_db() -> str:

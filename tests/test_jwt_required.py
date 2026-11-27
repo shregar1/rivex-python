@@ -194,6 +194,12 @@ def test_jwt_required_e2e_run(jwt_app, tmp_path):
 
     import httpx
 
+    import os
+    from pathlib import Path
+    env = dict(os.environ)
+    src_dir = str(Path(__file__).parent.parent / "src")
+    env["PYTHONPATH"] = f"{src_dir}:{env.get('PYTHONPATH', '')}" if "PYTHONPATH" in env else src_dir
+
     port = _free_port()
     proc = subprocess.Popen(
         [
@@ -201,6 +207,7 @@ def test_jwt_required_e2e_run(jwt_app, tmp_path):
             "--host", "127.0.0.1", "--port", str(port),
         ],
         cwd=jwt_app,
+        env=env,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )

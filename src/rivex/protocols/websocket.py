@@ -8,9 +8,9 @@ import struct
 from enum import IntEnum
 from typing import Any
 
-from rivex.core._compat import HAS_CORE
-from rivex.core._compat import rc as _rc
-from rivex.core.exceptions import WebSocketDisconnect
+from rivex.native._compat import HAS_CORE
+from rivex.native._compat import rc as _rc
+from rivex.exceptions.http.exceptions import WebSocketDisconnect
 
 
 class WebSocketState(IntEnum):
@@ -69,6 +69,17 @@ class WebSocket:
         self.headers: dict[str, str] = self.scope.get("headers", {})
 
     async def accept(self, subprotocol: str | None = None) -> None:
+        """Complete the WebSocket handshake with the client.
+
+        Builds the ``101 Switching Protocols`` response, including the
+        computed ``Sec-WebSocket-Accept`` value and an optional
+        ``Sec-WebSocket-Protocol`` line, writes it to the underlying
+        stream, and flips :attr:`client_state` to ``CONNECTED``.
+
+        Args:
+            subprotocol: Optional subprotocol identifier the caller
+                selected during the handshake.
+        """
         key = self.headers.get("sec-websocket-key", "")
         accept_key = _compute_accept_key(key)
 
@@ -87,18 +98,50 @@ class WebSocket:
         self.client_state = WebSocketState.CONNECTED
 
     async def receive_text(self) -> str:
+        """Read the next text frame and decode it as UTF-8.
+
+        Returns:
+            The decoded string payload.
+
+        Raises:
+            WebSocketDisconnect: When the peer has closed the
+                connection (i.e. the underlying read returns ``None``).
+        """
         data = await self._read_frame()
         if data is None:
             raise WebSocketDisconnect()
         return data.decode("utf-8")
 
     async def receive_bytes(self) -> bytes:
+        """Read the next binary frame.
+
+        Returns:
+            The raw payload bytes.
+
+        Raises:
+            WebSocketDisconnect: When the peer has closed the
+                connection.
+        """
         data = await self._read_frame()
         if data is None:
             raise WebSocketDisconnect()
         return data
 
     async def receive_json(self, mode: str = "text") -> Any:
+        """Read a frame and parse it as JSON.
+
+        Args:
+            mode: Either ``"text"`` (read a text frame and decode the
+                JSON string) or ``"binary"`` (read a binary frame and
+                parse the bytes as JSON). Defaults to ``"text"``.
+
+        Returns:
+            The decoded Python value (typically a dict or list).
+
+        Raises:
+            WebSocketDisconnect: When the peer has closed the
+                connection.
+        """
         if mode == "text":
             text = await self.receive_text()
             return json.loads(text)
@@ -106,6 +149,14 @@ class WebSocket:
         return json.loads(data)
 
     async def send_text(self, data: str) -> None:
+        """Send a text frame to the peer.
+
+        Uses the Rust encoder when available; otherwise falls back to
+        the pure-Python :meth:`_write_frame` path.
+
+        Args:
+            data: The UTF-8 text payload to deliver.
+        """
         if HAS_CORE:
             self._writer.write(_rc.ws_encode_text(data))
             await self._writer.drain()
@@ -113,6 +164,14 @@ class WebSocket:
             await self._write_frame(data.encode("utf-8"), opcode=0x1)
 
     async def send_bytes(self, data: bytes) -> None:
+        """Send a binary frame to the peer.
+
+        Uses the Rust encoder when available; otherwise falls back to
+        the pure-Python :meth:`_write_frame` path.
+
+        Args:
+            data: The raw payload bytes to deliver.
+        """
         if HAS_CORE:
             self._writer.write(_rc.ws_encode_binary(data))
             await self._writer.drain()
@@ -120,6 +179,15 @@ class WebSocket:
             await self._write_frame(data, opcode=0x2)
 
     async def send_json(self, data: Any, mode: str = "text") -> None:
+        """Serialize ``data`` to JSON and send it as a text or binary frame.
+
+        Args:
+            data: Any value accepted by ``json.dumps`` — typically a
+                dict or list.
+            mode: Either ``"text"`` (send a text frame containing the
+                JSON string) or ``"binary"`` (send a binary frame
+                containing the UTF-8 bytes). Defaults to ``"text"``.
+        """
         text = json.dumps(data)
         if mode == "text":
             await self.send_text(text)
@@ -127,6 +195,16 @@ class WebSocket:
             await self.send_bytes(text.encode("utf-8"))
 
     async def close(self, code: int = 1000, reason: str = "") -> None:
+        """Send a Close frame and shut the connection down.
+
+        Uses the normal close code (1000) by default. Exceptions during
+        the close handshake or the writer teardown are swallowed so the
+        caller can use this as a finalizer without a try/except.
+
+        Args:
+            code: WebSocket close status code to send.
+            reason: Optional human-readable close reason.
+        """
         try:
             if HAS_CORE:
                 self._writer.write(_rc.ws_encode_close(code, reason))
@@ -144,11 +222,32 @@ class WebSocket:
             pass
 
     async def _read_frame(self) -> bytes | None:
+        """Dispatch to the Rust or pure-Python frame reader.
+
+        Returns:
+            The decoded payload for a data frame, or ``None`` when the
+            connection has been closed cleanly.
+        """
         if HAS_CORE:
             return await self._read_frame_rust()
         return await self._read_frame_py()
 
     async def _read_frame_rust(self) -> bytes | None:
+        """Read a single frame using the Rust ``rivex_core`` decoder.
+
+        Mirrors the wire layout of RFC 6455: a 1-byte header followed
+        by a 7-bit length, optional 16/64-bit extended length, optional
+        mask, and the payload. Control frames (PING/PONG/CLOSE) are
+        handled transparently: pings are auto-answered, pongs are
+        dropped, and a close frame raises :class:`WebSocketDisconnect`.
+
+        Returns:
+            The decoded payload, or ``None`` if the connection was
+            closed cleanly.
+
+        Raises:
+            WebSocketDisconnect: When a close frame is received.
+        """
         try:
             first_byte = await self._reader.readexactly(1)
             second_byte = await self._reader.readexactly(1)
@@ -201,6 +300,21 @@ class WebSocket:
         return bytes(frame_payload)
 
     def _decode_payload_length(self, second_byte: int, extended: bytes) -> int:
+        """Decode the WebSocket payload length from a frame header.
+
+        Implements the RFC 6455 length encoding: a 7-bit length in
+        ``second_byte`` selects between the inline length, a 16-bit
+        extended length, or a 64-bit extended length.
+
+        Args:
+            second_byte: The second byte of the frame header (the one
+                carrying the MASK bit and the 7-bit length).
+            extended: The bytes following ``second_byte`` — the
+                2- or 8-byte extended length when applicable.
+
+        Returns:
+            The decoded payload length in bytes.
+        """
         length = second_byte & 0x7F
         if length == 126:
             return struct.unpack("!H", extended[:2])[0]
@@ -209,6 +323,19 @@ class WebSocket:
         return length
 
     async def _read_frame_py(self) -> bytes | None:
+        """Read a single frame using the pure-Python implementation.
+
+        Used when ``rivex_core`` is not available. Mirrors
+        :meth:`_read_frame_rust` exactly from the caller's perspective,
+        including auto-reply on PING and raising
+        :class:`WebSocketDisconnect` on CLOSE.
+
+        Returns:
+            The decoded payload, or ``None`` on a clean close.
+
+        Raises:
+            WebSocketDisconnect: When a close frame is received.
+        """
         try:
             first_byte = await self._reader.readexactly(1)
             second_byte = await self._reader.readexactly(1)
@@ -255,6 +382,20 @@ class WebSocket:
         return payload
 
     async def _write_frame(self, data: bytes, opcode: int = 0x1) -> None:
+        """Encode ``data`` as a single unmasked WebSocket frame and write it.
+
+        Implements the RFC 6455 frame layout: a FIN bit plus the
+        supplied ``opcode`` in the first byte, the 7-bit /
+        16-bit / 64-bit length prefix as appropriate, and the raw
+        payload. The resulting frame is written to the underlying
+        writer and drained so the caller can continue immediately.
+
+        Args:
+            data: Payload bytes to send.
+            opcode: WebSocket opcode (``0x1`` for text, ``0x2`` for
+                binary, ``0x8`` for close, ``0x9`` for ping,
+                ``0xA`` for pong). Defaults to ``0x1`` (text).
+        """
         frame = bytearray()
         frame.append(0x80 | opcode)
 

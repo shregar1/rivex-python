@@ -25,7 +25,7 @@ class JWTAuthMiddleware:
     Every request is checked for a valid ``Authorization: Bearer <token>``
     header. Invalid / missing tokens receive a 401 response.
 
-    Kwargs (all passed to the Rust ``JwtAuthConfig``):
+    Kwargs (all passed to the Rust ``JWTAuthConfig``):
 
     - ``secret`` (str, required): HMAC secret or PEM-encoded RSA/EC key.
     - ``algorithm`` (str, default ``"HS256"``): ``HS256``, ``HS384``,

@@ -21,12 +21,52 @@ class BaseCommand:
     description: str = ""
 
     def add_arguments(self, parser: argparse.ArgumentParser) -> None:
+        """Register this command's CLI arguments on *parser*.
+
+        Subclasses override this to attach their own
+        ``argparse`` arguments. The base implementation is a no-op
+        so commands that take no options can skip overriding.
+
+        Args:
+            parser: The :class:`argparse.ArgumentParser` dedicated
+                to this command. Mutations are visible to the
+                caller.
+        """
         pass
 
     def handle(self, **options: Any) -> str | None:
+        """Execute the command's body using the parsed *options*.
+
+        Subclasses must override this. The returned string, when
+        non-empty, is printed by :meth:`run_from_argv` so users
+        see command output in the terminal.
+
+        Args:
+            **options: Keyword arguments produced by argparse
+                from :meth:`add_arguments`.
+
+        Returns:
+            A human-readable status string, or ``None`` to stay
+            silent. Subclasses should return ``None`` when they
+            have already produced their own output.
+        """
         raise NotImplementedError
 
     def run_from_argv(self, argv: list[str]) -> None:
+        """Bind argparse to *argv* and invoke :meth:`handle`.
+
+        Builds a private :class:`argparse.ArgumentParser` using
+        this command's ``name`` and ``description``, hands it to
+        :meth:`add_arguments`, parses the trailing arguments
+        (the command's own name is expected at index 1 of
+        *argv*, hence the slice from index 2), and dispatches to
+        :meth:`handle`. Any non-empty result from ``handle`` is
+        printed to stdout.
+
+        Args:
+            argv: The full CLI token vector — typically
+                ``["rivex", "command-name", ...]``.
+        """
         parser = argparse.ArgumentParser(prog=f"rivex {self.name}", description=self.description or self.help)
         self.add_arguments(parser)
         args, _ = parser.parse_known_args(argv[2:])
@@ -35,22 +75,70 @@ class BaseCommand:
             print(result)
 
     def get_version(self) -> str | None:
+        """Return the version banner for this command, if any.
+
+        The base implementation returns ``None``, which suppresses
+        any version output. Override when the command needs to
+        advertise its own version distinct from Rivex's own.
+
+        Returns:
+            The version string, or ``None`` if the command does
+            not expose one.
+        """
         return None
 
 
 def register_command(name: str, command: BaseCommand) -> None:
+    """Register a *command* instance under *name*.
+
+    Args:
+        name: The invocation name the user types after
+            ``rivex management`` (for example ``"creategroup"``).
+        command: An instantiated :class:`BaseCommand` subclass
+            ready to handle invocations.
+    """
     _registered_commands[name] = command
 
 
 def get_command(name: str) -> BaseCommand | None:
+    """Return the registered command for *name*, or ``None``.
+
+    Args:
+        name: The name previously passed to
+            :func:`register_command`.
+
+    Returns:
+        The :class:`BaseCommand` instance, or ``None`` when no
+        command has been registered under that name.
+    """
     return _registered_commands.get(name)
 
 
 def get_all_commands() -> dict[str, BaseCommand]:
+    """Return a copy of the global ``{name: command}`` registry.
+
+    Returns:
+        A shallow copy of the registry, so callers can iterate
+        without observing later registrations or vice versa.
+    """
     return dict(_registered_commands)
 
 
 def discover_commands(module_path: str = "rivex.management_commands") -> None:
+    """Import every submodule of *module_path* and register their commands.
+
+    Walks the package at *module_path*, imports each submodule,
+    and registers every :class:`BaseCommand` subclass it finds.
+    Failures during import are swallowed so a single broken
+    command does not prevent discovery of the rest. Missing
+    packages (no ``rivex.management_commands`` installed) are a
+    silent no-op.
+
+    Args:
+        module_path: Dotted import path to the package whose
+            submodules should be scanned. Defaults to
+            ``rivex.management_commands``.
+    """
     try:
         mod = importlib.import_module(module_path)
     except ImportError:
@@ -84,10 +172,20 @@ class CreateGroupCommand(BaseCommand):
     help = "Create a new permission group"
 
     def add_arguments(self, parser: argparse.ArgumentParser) -> None:
+        """Attach the ``name`` and ``--permissions`` arguments to *parser*."""
         parser.add_argument("name", help="Group name")
         parser.add_argument("--permissions", nargs="*", default=[], help="Permission codenames")
 
     def handle(self, **options: Any) -> str | None:
+        """Create the requested permission group in the auth engine's in-memory registry.
+
+        Args:
+            **options: ``name`` (the group name) and an optional
+                ``permissions`` list of permission codenames.
+
+        Returns:
+            A status string describing what was created.
+        """
         from rivex.auth.permissions import DEFAULT_PERMISSIONS
         name = options["name"]
         perms = options.get("permissions", [])
@@ -100,6 +198,16 @@ class ListGroupsCommand(BaseCommand):
     help = "List all permission groups"
 
     def handle(self, **options: Any) -> str | None:
+        """Print every permission group and the codenames it currently grants.
+
+        Args:
+            **options: Not used; accepted for the
+                :class:`BaseCommand` interface.
+
+        Returns:
+            A multi-line listing of groups and their permissions,
+            or ``"No groups defined."`` when the registry is empty.
+        """
         from rivex.auth.permissions import DEFAULT_PERMISSIONS
         if not DEFAULT_PERMISSIONS:
             return "No groups defined."
@@ -114,10 +222,24 @@ class CollectStaticCommand(BaseCommand):
     help = "Copy static files to a single output directory"
 
     def add_arguments(self, parser: argparse.ArgumentParser) -> None:
+        """Attach the ``--input`` and ``--output`` paths to *parser*."""
         parser.add_argument("--input", default="static/", help="Input static directory")
         parser.add_argument("--output", default="staticfiles/", help="Output directory")
 
     def handle(self, **options: Any) -> str | None:
+        """Copy every file under ``--input`` into ``--output`` preserving structure.
+
+        Missing input directories are reported instead of erroring
+        so the command is safe to run before any static assets
+        exist. The output directory and any missing intermediate
+        parents are created on demand.
+
+        Args:
+            **options: ``input`` and ``output`` paths.
+
+        Returns:
+            A summary of how many files were copied.
+        """
         import shutil
         from pathlib import Path
 
@@ -142,12 +264,29 @@ class MakeMessagesCommand(BaseCommand):
     help = "Extract translatable strings from source files"
 
     def add_arguments(self, parser: argparse.ArgumentParser) -> None:
+        """Attach the locale/source/output/domain flags to *parser*."""
         parser.add_argument("--locale", "-l", required=True, help="Locale code (e.g. fr)")
         parser.add_argument("--input-dir", default=".", help="Source directory")
         parser.add_argument("--output-dir", default="locale", help="Output locale directory")
         parser.add_argument("--domain", default="messages", help="Gettext domain")
 
     def handle(self, **options: Any) -> str | None:
+        """Run ``xgettext`` / ``msgmerge`` to refresh the project's ``.po`` catalog.
+
+        Builds an empty ``.pot`` template if ``xgettext`` did not
+        produce one, then either merges the new template into an
+        existing per-locale ``.po`` (via ``msgmerge``) or copies
+        the template in place as a fresh catalog. The gettext
+        binaries (``xgettext``, ``msgmerge``) must be on ``PATH``.
+
+        Args:
+            **options: ``locale``, ``output_dir``, ``domain``, and
+                ``input_dir``.
+
+        Returns:
+            A status string indicating whether the catalog was
+            updated or newly created.
+        """
         import subprocess
         from pathlib import Path
 
@@ -185,10 +324,24 @@ class CompileMessagesCommand(BaseCommand):
     help = "Compile .po files to .mo binaries"
 
     def add_arguments(self, parser: argparse.ArgumentParser) -> None:
+        """Attach the ``--input-dir`` and ``--domain`` flags to *parser*."""
         parser.add_argument("--input-dir", default="locale", help="Locale directory")
         parser.add_argument("--domain", default="messages", help="Gettext domain")
 
     def handle(self, **options: Any) -> str | None:
+        """Compile every ``.po`` file in the locale directory into ``.mo`` binaries.
+
+        Uses the external ``msgfmt`` binary; a missing locale
+        directory is reported but not treated as fatal so the
+        command is safe to run before catalogs exist.
+
+        Args:
+            **options: ``input_dir`` and ``domain`` controlling
+                which ``.po`` files are matched.
+
+        Returns:
+            A summary of how many ``.po`` files were compiled.
+        """
         import subprocess
         from pathlib import Path
 

@@ -36,7 +36,7 @@ class {{model_class}}sController(IController):
         service = List{{model_class}}sService()
         return await self.invoke_service(service, request)
 
-    @get("/{{path_param}}", summary="Fetch a {{singular}}")
+    @get("/{{{path_param}}}", summary="Fetch a {{singular}}")
     @timer("controller")
     async def get_{{singular}}(self, {{path_param}}: int = Path(ge=1)) -> dict:
         request = Get{{model_class}}Request({{path_param}}={{path_param}})
@@ -49,7 +49,7 @@ class {{model_class}}sController(IController):
         service = Create{{model_class}}Service()
         return await self.invoke_service(service, payload)
 
-    @patch("/{{path_param}}", summary="Update a {{singular}}")
+    @patch("/{{{path_param}}}", summary="Update a {{singular}}")
     @timer("controller")
     async def update_{{singular}}(
         self,
@@ -63,7 +63,7 @@ class {{model_class}}sController(IController):
         service = Update{{model_class}}Service()
         return await self.invoke_service(service, request)
 
-    @delete("/{{path_param}}", summary="Delete a {{singular}}")
+    @delete("/{{{path_param}}}", summary="Delete a {{singular}}")
     @timer("controller")
     async def delete_{{singular}}(self, {{path_param}}: int = Path(ge=1)) -> dict:
         request = Delete{{model_class}}Request({{path_param}}={{path_param}})

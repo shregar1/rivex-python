@@ -161,8 +161,8 @@ MultipartBody = Form
 def parse_multipart(body: bytes, content_type: str) -> dict[str, list[Any]]:
     """Parse multipart/form-data body into a dict of field name → values."""
     try:
-        from rivex.core._compat import HAS_CORE
-        from rivex.core._compat import rc as _rc
+        from rivex.native._compat import HAS_CORE
+        from rivex.native._compat import rc as _rc
 
         if not HAS_CORE or not hasattr(_rc, "parse_multipart"):
             raise ImportError

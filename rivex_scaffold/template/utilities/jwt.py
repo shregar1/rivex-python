@@ -19,7 +19,7 @@ from configs import Settings
 from configurations import AppConfiguration
 
 
-class JwtUtility(IUtility):
+class JWTUtility(IUtility):
     """Create and verify JSON Web Tokens."""
 
     @classmethod
@@ -55,7 +55,7 @@ class JwtUtility(IUtility):
 
 
 __all__ = [
-    "JwtUtility",
+    "JWTUtility",
     "JWTError",
     "ExpiredTokenError",
     "InvalidTokenError",
